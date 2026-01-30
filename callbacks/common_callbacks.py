@@ -1,9 +1,8 @@
-from os import name
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database import Genre, Countries
-from admins import get_country_btns, get_genre_btns
+from database import Genre, Countries, User
+from admins import get_country_btns, get_genre_btns, get_managers_btns
 from utils import error_notificator
 
 
@@ -17,7 +16,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data_sp[0] == 'confirm':
                 try:
                     new_genre = context.user_data.pop('new_genre')
-                    context.user_data.pop('add_genre_state')
+                    context.user_data.pop('state')
                     await Genre.create(name=new_genre)
                     keyboard, i = await get_genre_btns()
                     await query.edit_message_text("Yangi janr qo'shildi", reply_markup=keyboard)
@@ -49,7 +48,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data_sp[0] == 'confirm':
                 try:
                     new_country = context.user_data.pop('new_country')
-                    context.user_data.pop('add_country_state')
+                    context.user_data.pop('state')
 
                     country = await Countries.get_or_none(name=new_country)
                     if country is not None:
@@ -81,6 +80,44 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard, i = await get_country_btns()
                 await query.edit_message_text("Davlatni o'chirish bekor qilindi.", reply_markup=keyboard)
 
+    elif data_sp[1] == 'manager':
+        if data_sp[2] == 'add':
+            if data_sp[0] == 'confirm':
+                try:
+                    new_manager = context.user_data.pop('new_manager')
+                    context.user_data.pop('state')
+
+                    user = await User.get(telegram_id=new_manager)
+                    if user.user_type == 'admin':
+                        keyboard, i = await get_managers_btns()
+                        await query.edit_message_text("Bu foydalanuvchi allaqachon manager qilingan.", reply_markup=keyboard)
+                    else:
+                        await user.update_from_dict({"user_type": "admin"})
+                        await user.save()
+                        keyboard, i = await get_managers_btns()
+                        await query.edit_message_text("Yangi manager qo'shildi", reply_markup=keyboard)
+                except Exception as e:
+                    await error_notificator.notify(context, e, update)
+            else:
+                keyboard, i = await get_managers_btns()
+                context.user_data.pop('new_manager')
+                context.user_data.pop('state')
+                await query.edit_message_text('Manager qo\'shish bekor qilindi', reply_markup=keyboard)
+
+        elif data_sp[2] == 'delete':
+            if data_sp[0] == 'confirm':
+                try:
+                    manager_id = data_sp[3]
+                    user = await User.get(id=manager_id)
+                    await user.update_from_dict(data={"user_type": 'user'})
+                    await user.save()
+                    keyboard, i = await get_managers_btns()
+                    await query.edit_message_text("Manager o'chirildi", reply_markup=keyboard)
+                except Exception as e:
+                    await error_notificator.notify(context, e, update)
+            else:
+                keyboard, i = await get_managers_btns()
+                await query.edit_message_text("Managerni o'chirish bekor qilindi.", reply_markup=keyboard)
 
 
 
