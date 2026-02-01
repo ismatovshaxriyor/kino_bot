@@ -18,17 +18,23 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data_sp[1].isdigit():
         country_id = data_sp[1]
-        country = await Countries.get(country_id=country_id)
+        country = await Countries.get_or_none(country_id=country_id)
 
-        btns = [
-            [
-                InlineKeyboardButton("O'chirish", callback_data=f"country_delete_{country_id}"),
-                InlineKeyboardButton("Ortga qaytish", callback_data='country_back')
+        if country:
+            btns = [
+                [
+                    InlineKeyboardButton("O'chirish", callback_data=f"country_delete_{country_id}"),
+                    InlineKeyboardButton("Ortga qaytish", callback_data='country_back')
+                ]
             ]
-        ]
-        keyboard = InlineKeyboardMarkup(btns)
+            keyboard = InlineKeyboardMarkup(btns)
 
-        await query.edit_message_text(f"Davlat: {country.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+            await query.edit_message_text(f"Davlat: {country.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+        else:
+            btn = [[InlineKeyboardButton("Ortga qaytish", callback_data='country_back')]]
+            keyboard = InlineKeyboardMarkup(btn)
+
+            await query.edit_message_text(f"Davlat: {country.name}\n\n harakatni tanlang:", reply_markup=keyboard)
 
     elif data_sp[1] == 'delete':
         country_id = data_sp[2]

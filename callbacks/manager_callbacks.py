@@ -18,17 +18,22 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data_sp[1].isdigit():
         manager_id = data_sp[1]
-        manager = await User.get(id=manager_id)
+        manager = await User.get_or_none(id=manager_id)
 
-        btns = [
-            [
-                InlineKeyboardButton("O'chirish", callback_data=f"manager_delete_{manager_id}"),
-                InlineKeyboardButton("Ortga qaytish", callback_data='manager_back')
+        if manager:
+            btns = [
+                [
+                    InlineKeyboardButton("O'chirish", callback_data=f"manager_delete_{manager_id}"),
+                    InlineKeyboardButton("Ortga qaytish", callback_data='manager_back')
+                ]
             ]
-        ]
-        keyboard = InlineKeyboardMarkup(btns)
+            keyboard = InlineKeyboardMarkup(btns)
 
-        await query.edit_message_text(f"Manager: {manager.first_name}\n\nharakatni tanlang:", reply_markup=keyboard)
+            await query.edit_message_text(f"Manager: {manager.first_name}\n\nharakatni tanlang:", reply_markup=keyboard)
+        else:
+            btn = [[InlineKeyboardButton("Ortga qaytish", callback_data='manager_back')]]
+            keyboard = InlineKeyboardMarkup(btn)
+            await query.edit_message_text(f"Manager allaqachon o'chirilgan", reply_markup=keyboard)
 
     elif data_sp[1] == 'delete':
         manager_id = data_sp[2]

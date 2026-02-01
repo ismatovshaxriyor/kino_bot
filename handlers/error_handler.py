@@ -29,6 +29,9 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         f"<pre>{html.escape(tb_string)}</pre>"
     )
 
+    if len(message) > 4090:
+        message = message[:4090] + "..."
+
     await context.bot.send_message(
         chat_id=ADMIN_ID, text=message, parse_mode=ParseMode.HTML
     )

@@ -54,6 +54,7 @@ async def run_worker(bot_token: str):
                 args = msg['args']
 
                 if method == "send_message":
+                    print(f"message send: {chat_id}")
                     await bot.send_message(chat_id=chat_id, text=content, **args)
 
                 elif method == "send_video":

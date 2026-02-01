@@ -18,17 +18,22 @@ async def genre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data_sp[1].isdigit():
         genre_id = data_sp[1]
-        genre = await Genre.get(genre_id=genre_id)
+        genre = await Genre.get_or_none(genre_id=genre_id)
 
-        btns = [
-            [
-                InlineKeyboardButton("O'chirish", callback_data=f"genre_delete_{genre_id}"),
-                InlineKeyboardButton("Ortga qaytish", callback_data='genre_back')
+
+        if genre:
+            btns = [
+                [
+                    InlineKeyboardButton("O'chirish", callback_data=f"genre_delete_{genre_id}"),
+                    InlineKeyboardButton("Ortga qaytish", callback_data='genre_back')
+                ]
             ]
-        ]
-        keyboard = InlineKeyboardMarkup(btns)
-
-        await query.edit_message_text(f"Janr: {genre.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+            keyboard = InlineKeyboardMarkup(btns)
+            await query.edit_message_text(f"Janr: {genre.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+        else:
+            btn = [[InlineKeyboardButton("Ortga qaytish", callback_data='genre_back')]]
+            keyboard = InlineKeyboardMarkup(btn)
+            await query.edit_message_text("Janr allaqachon o'chirilgan.", reply_markup=keyboard)
 
     elif data_sp[1] == 'delete':
         genre_id = data_sp[2]

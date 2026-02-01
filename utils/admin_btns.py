@@ -1,4 +1,4 @@
-from telegram import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import KeyboardButton, ReplyKeyboardMarkup
 
 
 admin_btns = [
@@ -10,11 +10,10 @@ admin_btns = [
         KeyboardButton("🌏 Davlatlar")
     ],
     [
-        KeyboardButton("👤 Managerlar"),
-        KeyboardButton("📢 Kanallar")
+        KeyboardButton("📢 Kanallar"),
+        KeyboardButton("📊 Statistika")
     ],
     [
-        KeyboardButton("📊 Statistika"),
         KeyboardButton("🔙 Orqaga")
     ]
 ]

@@ -9,6 +9,9 @@ from .managers_handler import get_managers_btns
 async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('state')
 
+    if state is None:
+        return
+
     if state == 'WAITING_GENRE_NAME':
         genre = update.message.text
         context.user_data['new_genre'] = genre.capitalize()
@@ -69,3 +72,5 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
         confirm_keyboard = InlineKeyboardMarkup(confirm_btns)
 
         await update.message.reply_text(f"Yangi Manager: {new_manager.first_name} {new_manager.last_name if new_manager.last_name else None}. Tasdiqlaysizmi?", reply_markup=confirm_keyboard)
+    else:
+        pass

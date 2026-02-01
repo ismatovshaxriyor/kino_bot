@@ -20,8 +20,6 @@ class User(Model):
     updated_at = fields.DatetimeField(auto_now=True)
 
 
-
-
 class UserMovieHistory(Model):
     user = fields.ForeignKeyField('models.User', related_name='user')
     movie = fields.ForeignKeyField('models.Movie', related_name='movie')
