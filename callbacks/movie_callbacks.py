@@ -9,7 +9,7 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    _, action, value = query.data.split(":")
+    _, action, value = query.data.split("_")
 
     if action == "page":
         page = int(value)

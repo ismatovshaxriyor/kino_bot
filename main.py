@@ -18,12 +18,14 @@ def main():
 
     bot.add_handler(add_movie_conf_handler)
 
+    bot.add_handler(MessageHandler(filters.TEXT, message_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar"), get_genres))
     bot.add_handler(MessageHandler(filters.Regex(r"🌏 Davlatlar"), get_countries))
     bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar"), get_managers))
     bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar"), get_movies))
     bot.add_handler(MessageHandler(filters.TEXT, general_message_handler))
 
+    bot.add_handler(CallbackQueryHandler(movie_callback, pattern=r"^movie_"))
     bot.add_handler(CallbackQueryHandler(genre_callback, pattern=r"^genre_"))
     bot.add_handler(CallbackQueryHandler(country_callback, pattern=r"^country_"))
     bot.add_handler(CallbackQueryHandler(manager_callback, pattern=r"^manager_"))

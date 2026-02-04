@@ -3,7 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PAGE_SIZE = 50
+PAGE_SIZE = 40
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID"))

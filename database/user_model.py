@@ -12,6 +12,9 @@ class User(Model):
     telegram_id = fields.BigIntField(unique=True)
     user_type = fields.CharEnumField(USER_TYPE, default=USER_TYPE.USER)
 
+    ai_usage = fields.IntField(default=0)
+    ai_usage_date = fields.DateField(null=True)
+
     first_name = fields.CharField(max_length=128, null=True)
     last_name = fields.CharField(max_length=128, null=True)
     username = fields.CharField(max_length=128, null=True)
