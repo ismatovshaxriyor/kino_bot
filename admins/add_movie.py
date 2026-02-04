@@ -47,6 +47,7 @@ async def add_movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
         context.user_data["last_msg"] = msg.message_id
+        context.user_data['state'] = 'ADD_MOVIE'
         return ADD_MOVIE
 
 
@@ -64,7 +65,7 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_msg:
             await context.bot.delete_message(update.effective_chat.id, last_msg)
     except Exception as e:
-        error_notificator.notify(context, e, update)
+        await error_notificator.notify(context, e, update)
 
     await update.message.delete()
 
@@ -86,7 +87,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_msg:
             await context.bot.delete_message(update.effective_chat.id, last_msg)
     except Exception as e:
-        error_notificator.notify(context, e, update)
+        await error_notificator.notify(context, e, update)
 
     await update.message.delete()
 
@@ -471,7 +472,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
 
         except Exception as e:
-            await query.message.reply_text("❌ Saqlashda xatolik yuz berdi. Admin bilan bog'laning.", reply_markup=admin_keyboard)
+
             await error_notificator.notify(context, e, update)
 
     elif action == 'reject':

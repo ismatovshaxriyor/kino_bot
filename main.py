@@ -16,8 +16,11 @@ def main():
 
     bot.add_handler(CommandHandler('start', start_handler))
     bot.add_handler(CommandHandler("admin", admin_handler))
+    bot.add_handler(CommandHandler("history", history_handler))
+    bot.add_handler(CommandHandler("top", top_handler))
 
     bot.add_handler(add_movie_conf_handler)
+    bot.add_handler(edit_movie_handler)
 
     # Admin handlers
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar"), get_genres))
@@ -41,7 +44,7 @@ def main():
     bot.add_handler(CallbackQueryHandler(country_callback, pattern=r"^country_"))
     bot.add_handler(CallbackQueryHandler(manager_callback, pattern=r"^manager_"))
     bot.add_handler(CallbackQueryHandler(channel_callback, pattern=r"^channel_"))
-    bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|user_back|noop)"))
+    bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|user_back|noop|rate_movie_|set_rating_|uhistory_page_|utop_page_)"))
     bot.add_handler(CallbackQueryHandler(check_subscription_callback, pattern=r"^check_subscription$"))
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))
 

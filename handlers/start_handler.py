@@ -45,11 +45,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         await error_notificator.notify(context, e, update)
-        error_msg = (
-            "❌ <b>Xatolik yuz berdi!</b>\n\n"
-            "Iltimos, qayta /start bosing."
-        )
-        await update.message.reply_text(error_msg, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+
 
 
 

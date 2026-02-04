@@ -1,45 +1,106 @@
 import json
 import asyncio
 import redis.asyncio as redis
-from telegram import Message, Bot
+from telegram import Bot
 
 REDIS_URL = "redis://localhost"
 QUEUE_NAME = "bot_queue"
 
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Original metodlarni saqlab qolamiz
+_original_send_message = Bot.send_message
+_original_send_video = Bot.send_video
+_original_edit_message_text = Bot.edit_message_text
+_original_edit_message_caption = Bot.edit_message_caption
+_original_edit_message_reply_markup = Bot.edit_message_reply_markup
+_original_delete_message = Bot.delete_message
+
+def clean_kwargs(kwargs):
+    """Redisga yozishdan oldin argumentlarni tozalash"""
+    cleaned = {}
+    for k, v in kwargs.items():
+        # DefaultValue obyektlarini o'tkazib yuborish
+        if "DefaultValue" in str(type(v)):
+            continue
+
+        # Enum'larni qiymatiga o'tkazish
+        if hasattr(v, "value"):
+            cleaned[k] = v.value
+            continue
+
+        # Reply Markup ni dict ga o'tkazish
+        if k == "reply_markup":
+            if hasattr(v, "to_dict"):
+                cleaned[k] = v.to_dict()
+            elif isinstance(v, dict):
+                cleaned[k] = v
+            continue
+
+        # Oddiy tiplarni qabul qilish
+        if isinstance(v, (str, int, float, bool, list, dict, type(None))):
+             cleaned[k] = v
+
+    return cleaned
+
 async def _push_to_redis(chat_id, method, content, **kwargs):
-    if "reply_markup" in kwargs:
-        markup = kwargs["reply_markup"]
-        if hasattr(markup, "to_dict"):
-            kwargs["reply_markup"] = markup.to_dict()
+    # Argumentlarni tozalash
+    cleaned_args = clean_kwargs(kwargs)
 
     payload = {
         "chat_id": chat_id,
         "method": method,
         "content": content,
-        "args": kwargs
+        "args": cleaned_args
     }
 
-    await r.rpush(QUEUE_NAME, json.dumps(payload))
+    try:
+        await r.rpush(QUEUE_NAME, json.dumps(payload))
+    except Exception as e:
+        print(f"❌ Redis Push Error: {e}")
 
+# Patched methods
+async def patched_send_message(self, chat_id, text, **kwargs):
+    await _push_to_redis(chat_id, "send_message", text, **kwargs)
 
-async def patched_reply_text(self, text, **kwargs):
-    await _push_to_redis(self.chat_id, "send_message", text, **kwargs)
+async def patched_send_video(self, chat_id, video, **kwargs):
+    await _push_to_redis(chat_id, "send_video", video, **kwargs)
 
-async def patched_reply_video(self, video, **kwargs):
-    await _push_to_redis(self.chat_id, "send_video", video, **kwargs)
+async def patched_edit_message_text(self, text, chat_id=None, message_id=None, inline_message_id=None, **kwargs):
+    # Edit metodlarida content=text
+    kwargs['message_id'] = message_id
+    kwargs['inline_message_id'] = inline_message_id
+    await _push_to_redis(chat_id, "edit_message_text", text, **kwargs)
+
+async def patched_edit_message_caption(self, chat_id=None, message_id=None, inline_message_id=None, caption=None, **kwargs):
+    kwargs['message_id'] = message_id
+    kwargs['inline_message_id'] = inline_message_id
+    await _push_to_redis(chat_id, "edit_message_caption", caption, **kwargs)
+
+async def patched_edit_message_reply_markup(self, chat_id=None, message_id=None, inline_message_id=None, reply_markup=None, **kwargs):
+    kwargs['message_id'] = message_id
+    kwargs['inline_message_id'] = inline_message_id
+    kwargs['reply_markup'] = reply_markup
+    await _push_to_redis(chat_id, "edit_message_reply_markup", None, **kwargs)
+
+async def patched_delete_message(self, chat_id, message_id, **kwargs):
+    kwargs['message_id'] = message_id
+    await _push_to_redis(chat_id, "delete_message", None, **kwargs)
 
 
 def apply_redis_patch():
-    Message.reply_text = patched_reply_text
-    Message.reply_video = patched_reply_video
-    print("✅ Redis Patch muvaffaqiyatli qo'llanildi")
-
+    # Bot klassini patch qilamiz
+    Bot.send_message = patched_send_message
+    Bot.send_video = patched_send_video
+    Bot.edit_message_text = patched_edit_message_text
+    Bot.edit_message_caption = patched_edit_message_caption
+    Bot.edit_message_reply_markup = patched_edit_message_reply_markup
+    Bot.delete_message = patched_delete_message
+    print("✅ Redis Patch (Full Coverage) muvaffaqiyatli qo'llanildi")
 
 async def run_worker(bot_token: str):
     bot = Bot(token=bot_token)
-    print("🚀 Worker ishga tushdi, navbat kuzatilmoqda...")
+    print("🚀 Worker ishga tushdi (Full Mode)...")
 
     while True:
         try:
@@ -54,11 +115,28 @@ async def run_worker(bot_token: str):
                 args = msg['args']
 
                 if method == "send_message":
-                    print(f"message send: {chat_id}")
-                    await bot.send_message(chat_id=chat_id, text=content, **args)
+                    await _original_send_message(bot, chat_id=chat_id, text=content, **args)
+                    print(f"✅ MSG: {chat_id}")
 
                 elif method == "send_video":
-                    await bot.send_video(chat_id=chat_id, video=content, **args)
+                    await _original_send_video(bot, chat_id=chat_id, video=content, **args)
+                    print(f"✅ VID: {chat_id}")
+
+                elif method == "edit_message_text":
+                    await _original_edit_message_text(bot, text=content, chat_id=chat_id, **args)
+                    print(f"✅ EDIT TXT: {chat_id}")
+
+                elif method == "edit_message_caption":
+                    await _original_edit_message_caption(bot, caption=content, chat_id=chat_id, **args)
+                    print(f"✅ EDIT CAP: {chat_id}")
+
+                elif method == "edit_message_reply_markup":
+                    await _original_edit_message_reply_markup(bot, chat_id=chat_id, **args)
+                    print(f"✅ EDIT MKP: {chat_id}")
+
+                elif method == "delete_message":
+                    await _original_delete_message(bot, chat_id=chat_id, **args)
+                    print(f"✅ DEL: {chat_id}")
 
         except Exception as e:
             print(f"❌ Worker Xatoligi: {e}")

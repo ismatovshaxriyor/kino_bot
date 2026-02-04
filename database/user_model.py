@@ -24,8 +24,10 @@ class User(Model):
 
 
 class UserMovieHistory(Model):
-    user = fields.ForeignKeyField('models.User', related_name='user')
-    movie = fields.ForeignKeyField('models.Movie', related_name='movie')
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField('models.User', related_name='history')
+    movie = fields.ForeignKeyField('models.Movie', related_name='viewed_by')
+    viewed_at = fields.DatetimeField(auto_now=True)
 
     class Meta:
         unique_together = ('user', 'movie')

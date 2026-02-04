@@ -4,8 +4,8 @@ from datetime import date
 from math import ceil
 
 from services import ai_assistant
-from database import User, Movie
-from utils import error_notificator
+from database import User, Movie, UserMovieHistory, Rating
+from utils import error_notificator, ADMIN_ID, MANAGER_ID
 from utils.decorators import channel_subscription_required
 
 DAILY_LIMIT = 3
@@ -28,6 +28,9 @@ async def increase_ai_usage(user: User):
 @channel_subscription_required
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('state')
+
+    if state in ['EDIT_MOVIE', 'ADD_MOVIE']:
+        return
 
     if state == "SEARCH_BY_NAME":
         search_query = update.message.text.strip()
@@ -105,10 +108,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id, response)
 
         except Exception as e:
-            await update.message.reply_text(
-                f"❌ Javob berishda xatolik yuz berdi: {str(e)}\n\n"
-                "Iltimos keyinroq urinib ko'ring!"
-            )
+            await error_notificator.notify(context, e, update)
+
 
     else:
         # Kod orqali qidirish (state = None bo'lganda raqam yuborilsa)
@@ -142,13 +143,36 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if movie.movie_description:
                     movie_info += f"📝 <b>Tavsif:</b>\n{movie.movie_description[:500]}{'...' if len(movie.movie_description or '') > 500 else ''}\n\n"
 
+                # Tarixga yozish
+                user_id = update.effective_user.id
+                user = await User.get(telegram_id=user_id)
+
+                history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+                if not created:
+                    await history.save()
+
+                # Tugmalar (Baholash va Admin)
+                btns = []
+
+                # Baholash
+                has_rated = await Rating.exists(user=user, movie=movie)
+                if not has_rated:
+                    btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
+
+                # Admin tahrirlash
+                if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
+                    btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+                reply_markup = InlineKeyboardMarkup(btns) if btns else None
+
                 # Video yuborish
                 if movie.file_id:
                     await context.bot.send_video(
                         chat_id=update.effective_chat.id,
                         video=movie.file_id,
                         caption=movie_info,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
                     )
                 else:
                     await update.message.reply_text(movie_info, parse_mode="HTML")
