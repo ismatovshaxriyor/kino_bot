@@ -11,6 +11,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 MANAGER_ID = int(os.environ.get("MANAGER_ID"))
+INLINE_THUMB_URL = os.environ.get("INLINE_THUMB_URL")
 
 DB_NAME = os.environ.get("DB_NAME")
 DB_USER = os.environ.get("DB_USER")

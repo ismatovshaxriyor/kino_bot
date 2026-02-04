@@ -12,7 +12,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from database import Movie, Rating, User, UserMovieHistory
-from utils import ADMIN_ID, MANAGER_ID
+from utils import ADMIN_ID, INLINE_THUMB_URL, MANAGER_ID
 from utils.decorators import channel_subscription_required, user_registered_required
 
 
@@ -28,6 +28,7 @@ def _to_result(movie: Movie) -> InlineQueryResultArticle:
         id=f"mv_{movie.movie_id}",
         title=title[:80],
         description=description[:256],
+        thumbnail_url=INLINE_THUMB_URL if INLINE_THUMB_URL else None,
         input_message_content=InputTextMessageContent(
             f"/kino movie_{movie.movie_code}"
         ),
@@ -43,9 +44,8 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     movies: list[Movie] = []
 
     if not q:
-        movies = await Movie.filter(rating_count__gt=0).order_by(
-            "-rating_count", "-total_rating_sum"
-        ).limit(MAX_INLINE_RESULTS)
+        await query.answer(results=[], cache_time=5, is_personal=True)
+        return
     elif q.isdigit():
         # code first
         exact = await Movie.get_or_none(movie_code=int(q))
