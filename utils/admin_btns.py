@@ -12,9 +12,6 @@ admin_btns = [
     [
         KeyboardButton("📢 Kanallar"),
         KeyboardButton("📊 Statistika")
-    ],
-    [
-        KeyboardButton("🔙 Orqaga")
     ]
 ]
 

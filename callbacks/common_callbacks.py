@@ -25,7 +25,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard, i = await get_genre_btns()
                 context.user_data.pop('new_genre')
-                context.user_data.pop('add_genre_state')
+                context.user_data.pop('state', None)
                 await query.edit_message_text('❌ Janr qo\'shish bekor qilindi', reply_markup=keyboard)
 
         elif data_sp[2] == 'delete':
@@ -63,7 +63,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard, i = await get_country_btns()
                 context.user_data.pop('new_country')
-                context.user_data.pop('add_country_state')
+                context.user_data.pop('state', None)
                 await query.edit_message_text('❌ Davlat qo\'shish bekor qilindi', reply_markup=keyboard)
 
         elif data_sp[2] == 'delete':

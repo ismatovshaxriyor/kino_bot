@@ -1,4 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
 
@@ -200,13 +201,21 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Video yuborish (ma'lumot bilan)
         if movie.file_id:
-            await context.bot.send_video(
-                chat_id=update.effective_chat.id,
-                video=movie.file_id,
-                caption=movie_info,
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
+            try:
+                await context.bot.send_video(
+                    chat_id=update.effective_chat.id,
+                    video=movie.file_id,
+                    caption=movie_info,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+            except BadRequest:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
         else:
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,

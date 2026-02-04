@@ -28,6 +28,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar"), get_managers))
     bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar"), get_movies))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar"), get_channels))
+    bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika"), statistics_handler))
 
     # User handlers
     bot.add_handler(MessageHandler(filters.Regex(r"🔍 Nomi bo'yicha"), search_by_name_handler))
@@ -36,7 +37,6 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi"), ai_assistant_handler))
 
     bot.add_handler(MessageHandler(filters.TEXT, message_handler))
-    bot.add_handler(MessageHandler(filters.TEXT, general_message_handler))
 
     # Callbacks
     bot.add_handler(CallbackQueryHandler(movie_callback, pattern=r"^movie_"))
@@ -44,6 +44,7 @@ def main():
     bot.add_handler(CallbackQueryHandler(country_callback, pattern=r"^country_"))
     bot.add_handler(CallbackQueryHandler(manager_callback, pattern=r"^manager_"))
     bot.add_handler(CallbackQueryHandler(channel_callback, pattern=r"^channel_"))
+    bot.add_handler(CallbackQueryHandler(statistics_callback, pattern=r"^stats_"))
     bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|user_back|noop|rate_movie_|set_rating_|uhistory_page_|utop_page_)"))
     bot.add_handler(CallbackQueryHandler(check_subscription_callback, pattern=r"^check_subscription$"))
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))

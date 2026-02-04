@@ -3,17 +3,19 @@ from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 
 from database import Movie, QualityEnum, LanguageEnum
 from utils.decorators import admin_required
-from utils import error_notificator
+from utils import error_notificator, get_movies_page
+from admins.movie_handlers import get_movies_keyboard
 
 SELECTING_ACTION, WAITING_INPUT = range(2)
 
 @admin_required
-async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie_id: int = None):
     """Kinoni tahrirlashni boshlash"""
     query = update.callback_query
     await query.answer()
 
-    movie_id = int(query.data.split("_")[2])
+    if movie_id is None:
+        movie_id = int(query.data.split("_")[2])
     context.user_data['edit_movie_id'] = movie_id
     context.user_data['state'] = 'EDIT_MOVIE'
 
@@ -86,14 +88,8 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data['state'] = None
 
     if data == "delete_no":
-        # Menyuga qaytish (start_edit_movie dagi logicni takrorlash kerak yoki rekursiv chaqirish mumkin emas)
-        # Shunchaki start_edit_movie ni chaqirsak bo'ladi update.callback_query.data ni o'zgartirib.
-        # Yoki shunchaki qaytadan keyboard chizish.
         movie_id = context.user_data.get('edit_movie_id')
-        # Qayta chizish uchun start_edit_movie ni chaqirish uchun query.data ni moslash kerak.
-        # Lekin start_edit_movie da split("_")[2] bor.
-        query.data = f"edit_movie_{movie_id}"
-        return await start_edit_movie(update, context)
+        return await start_edit_movie(update, context, movie_id=movie_id)
 
     # Sifat va Til uchun alohida menyu
     if data == "edit_field_quality":
@@ -125,13 +121,11 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await movie.save()
         await query.answer(msg, show_alert=True)
         # Menyuga qaytish
-        query.data = f"edit_movie_{movie_id}"
-        return await start_edit_movie(update, context)
+        return await start_edit_movie(update, context, movie_id=movie_id)
 
     if data == "back_to_menu":
         movie_id = context.user_data.get('edit_movie_id')
-        query.data = f"edit_movie_{movie_id}"
-        return await start_edit_movie(update, context)
+        return await start_edit_movie(update, context, movie_id=movie_id)
 
     # Text input talab qiladigan fieldlar
     field_map = {
@@ -193,13 +187,17 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await movie.save()
         await update.message.reply_text("✅ Muvaffaqiyatli saqlandi!")
 
-        # Menyuni qayta chiqarish (yangi message bilan, chunki eskisini edit qilish qiyin text inputdan keyin)
-        # Yoki shunchaki tugatish.
-        # Userga kinoni qayta ko'rsatish yaxshi.
+        # User so'rovi: Kinolar ro'yxatiga qaytish
+        page = context.user_data.get('MOVIE_PAGE', 1)
+        data = await get_movies_page(page)
 
-        # Simulyatsiya qilingan callback update yasash qiyin. Shunchaki info chiqarib tugatamiz.
-        movie_info = f"🎬 {movie.movie_name} ({movie.movie_year})\n📥 {movie.movie_code}"
-        await update.message.reply_text(f"Yangilangan ma'lumot:\n{movie_info}")
+        reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
+
+        await update.message.reply_text(
+            f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
 
         context.user_data['state'] = None
         return ConversationHandler.END

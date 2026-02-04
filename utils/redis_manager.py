@@ -2,6 +2,10 @@ import json
 import asyncio
 import redis.asyncio as redis
 from telegram import Bot
+try:
+    from telegram.ext import ExtBot
+except ImportError:
+    ExtBot = None
 
 REDIS_URL = "redis://localhost"
 QUEUE_NAME = "bot_queue"
@@ -61,9 +65,13 @@ async def _push_to_redis(chat_id, method, content, **kwargs):
 
 # Patched methods
 async def patched_send_message(self, chat_id, text, **kwargs):
+    if kwargs.pop('direct', False):
+        return await _original_send_message(self, chat_id, text, **kwargs)
     await _push_to_redis(chat_id, "send_message", text, **kwargs)
 
 async def patched_send_video(self, chat_id, video, **kwargs):
+    if kwargs.pop('direct', False):
+        return await _original_send_video(self, chat_id, video, **kwargs)
     await _push_to_redis(chat_id, "send_video", video, **kwargs)
 
 async def patched_edit_message_text(self, text, chat_id=None, message_id=None, inline_message_id=None, **kwargs):
@@ -96,12 +104,24 @@ def apply_redis_patch():
     Bot.edit_message_caption = patched_edit_message_caption
     Bot.edit_message_reply_markup = patched_edit_message_reply_markup
     Bot.delete_message = patched_delete_message
+
+    # ExtBot ni ham patch qilamiz (chunki Application shuni ishlatadi)
+    if ExtBot:
+        ExtBot.send_message = patched_send_message
+        ExtBot.send_video = patched_send_video
+        ExtBot.edit_message_text = patched_edit_message_text
+        ExtBot.edit_message_caption = patched_edit_message_caption
+        ExtBot.edit_message_reply_markup = patched_edit_message_reply_markup
+        ExtBot.delete_message = patched_delete_message
+        print("✅ ExtBot Patch applied")
+
     print("✅ Redis Patch (Full Coverage) muvaffaqiyatli qo'llanildi")
 
 async def run_worker(bot_token: str):
     bot = Bot(token=bot_token)
     print("🚀 Worker ishga tushdi (Full Mode)...")
 
+    msg = None
     while True:
         try:
             data = await r.blpop(QUEUE_NAME, timeout=1)
@@ -139,5 +159,11 @@ async def run_worker(bot_token: str):
                     print(f"✅ DEL: {chat_id}")
 
         except Exception as e:
-            print(f"❌ Worker Xatoligi: {e}")
+            if msg:
+                method = msg.get("method")
+                content = str(msg.get("content", ""))[:80]
+                chat_id = msg.get("chat_id")
+                print(f"❌ Worker Xatoligi: {e} | method={method} chat_id={chat_id} content={content}")
+            else:
+                print(f"❌ Worker Xatoligi: {e}")
             await asyncio.sleep(0.1)

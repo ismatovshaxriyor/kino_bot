@@ -1,4 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from datetime import date
 from math import ceil
@@ -29,7 +30,10 @@ async def increase_ai_usage(user: User):
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('state')
 
-    if state in ['EDIT_MOVIE', 'ADD_MOVIE']:
+    if state and state not in ["SEARCH_BY_NAME", "CHAT_WITH_AI"]:
+        # Admin/manager text states are handled in admins.common_handler
+        from admins.common_handler import general_message_handler
+        await general_message_handler(update, context)
         return
 
     if state == "SEARCH_BY_NAME":
@@ -167,13 +171,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Video yuborish
                 if movie.file_id:
-                    await context.bot.send_video(
-                        chat_id=update.effective_chat.id,
-                        video=movie.file_id,
-                        caption=movie_info,
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
+                    try:
+                        await context.bot.send_video(
+                            chat_id=update.effective_chat.id,
+                            video=movie.file_id,
+                            caption=movie_info,
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    except BadRequest:
+                        await update.message.reply_text(
+                            movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                            parse_mode="HTML",
+                            reply_markup=reply_markup,
+                        )
                 else:
                     await update.message.reply_text(movie_info, parse_mode="HTML")
             else:
@@ -182,6 +193,4 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🔄 Boshqa kod bilan urinib ko'ring.",
                     parse_mode="HTML"
                 )
-
-
 

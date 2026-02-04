@@ -1,5 +1,6 @@
 from telegram.ext import ConversationHandler, CallbackQueryHandler, MessageHandler, ContextTypes, CommandHandler, filters
 from telegram import ReplyKeyboardMarkup, Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton
+from html import escape
 
 from utils import admin_required, admin_btns, error_notificator, ADMIN_ID, MANAGER_ID
 from database import Movie, Genre, Countries, QualityEnum, LanguageEnum
@@ -19,12 +20,13 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id == ADMIN_ID or user_id == MANAGER_ID:
             admin_btns.insert(-1, [KeyboardButton("👤 Managerlar")])
         await update.message.reply_text(
-            "Kino qo'shish bekor qilindi",
-            reply_markup=admin_keyboard
+            "❌ <b>Kino qo'shish bekor qilindi.</b>",
+            reply_markup=admin_keyboard,
+            parse_mode="HTML",
         )
     elif update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text("Kino qo'shish bekor qilindi")
+        await update.callback_query.edit_message_text("❌ <b>Kino qo'shish bekor qilindi.</b>", parse_mode="HTML")
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -43,10 +45,12 @@ async def add_movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             chat_id=update.effective_chat.id,
             text="✍️ **Kino kodini kiriting:**",
             reply_markup=ReplyKeyboardRemove(),
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            direct=True
         )
 
-        context.user_data["last_msg"] = msg.message_id
+        if msg:
+            context.user_data["last_msg"] = msg.message_id
         context.user_data['state'] = 'ADD_MOVIE'
         return ADD_MOVIE
 
@@ -55,7 +59,7 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     movie_code = update.message.text.strip()
 
     if not movie_code.isdigit():
-        await update.message.reply_text("Iltimos faqat raqam kiriting:")
+        await update.message.reply_text("⚠️ <b>Iltimos, faqat raqam kiriting.</b>", parse_mode="HTML")
         return ADD_MOVIE
 
     context.user_data["movie_code"] = movie_code
@@ -71,10 +75,13 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Yangi kino nomini kiriting:"
+        text="🎬 <b>Yangi kino nomini kiriting:</b>",
+        parse_mode="HTML",
+        direct=True
     )
 
-    context.user_data['last_msg'] = msg.message_id
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_CODE
 
 
@@ -107,11 +114,22 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             genre_btns.append(btns)
         keyboard = InlineKeyboardMarkup(genre_btns)
 
-        msg = await context.bot.send_message(update.effective_chat.id, "Janrlarni tanlang:", reply_markup=keyboard)
-        context.user_data['last_msg'] = msg.message_id
+        msg = await context.bot.send_message(
+            update.effective_chat.id,
+            "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+            direct=True,
+        )
+        if msg:
+            context.user_data['last_msg'] = msg.message_id
         return GET_NAME
     else:
-        await update.message.reply_text("Janrlar topilmadi, Iltimos avval janr qo'shing.", reply_markup=admin_keyboard)
+        await update.message.reply_text(
+            "📭 <b>Janrlar topilmadi.</b>\n\nAvval janr qo'shing.",
+            reply_markup=admin_keyboard,
+            parse_mode="HTML",
+        )
         return ConversationHandler.END
 
 
@@ -155,11 +173,18 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if btns:
                     genre_btns.append(btns)
-                genre_btns += [[InlineKeyboardButton("Tasdiqlash", callback_data="movie:genre:confirm")]]
+                genre_btns += [[InlineKeyboardButton("✅ Tasdiqlash", callback_data="movie:genre:confirm")]]
                 keyboard = InlineKeyboardMarkup(genre_btns)
 
-                msg = await context.bot.send_message(update.effective_chat.id, "Janrlarni tanlang:", reply_markup=keyboard)
-                context.user_data['last_msg'] = msg.message_id
+                msg = await context.bot.send_message(
+                    update.effective_chat.id,
+                    "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    direct=True,
+                )
+                if msg:
+                    context.user_data['last_msg'] = msg.message_id
                 return GET_NAME
         elif data == 'confirm':
             countries = await Countries.all()
@@ -178,11 +203,21 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     country_btns.append(btns)
                 keyboard = InlineKeyboardMarkup(country_btns)
 
-                msg = await context.bot.send_message(update.effective_chat.id, "Davlatlarni tanlang:", reply_markup=keyboard)
+                msg = await context.bot.send_message(
+                    update.effective_chat.id,
+                    "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    direct=True,
+                )
                 context.user_data['last_msg'] = msg.message_id
                 return GET_GENRE
             else:
-                await update.message.reply_text("Davlatlar topilmadi, Iltimos avval davlat qo'shing.", reply_markup=admin_keyboard)
+                await query.message.reply_text(
+                    "📭 <b>Davlatlar topilmadi.</b>\n\nAvval davlat qo'shing.",
+                    reply_markup=admin_keyboard,
+                    parse_mode="HTML",
+                )
                 return ConversationHandler.END
 
 
@@ -226,15 +261,28 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if btns:
                     country_btns.append(btns)
-                country_btns += [[InlineKeyboardButton("Tasdiqlash", callback_data="movie:country:confirm")]]
+                country_btns += [[InlineKeyboardButton("✅ Tasdiqlash", callback_data="movie:country:confirm")]]
                 keyboard = InlineKeyboardMarkup(country_btns)
 
-                msg = await context.bot.send_message(update.effective_chat.id, "Davlatlarni tanlang:", reply_markup=keyboard)
-                context.user_data['last_msg'] = msg.message_id
+                msg = await context.bot.send_message(
+                    update.effective_chat.id,
+                    "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                    direct=True,
+                )
+                if msg:
+                    context.user_data['last_msg'] = msg.message_id
                 return GET_GENRE
         elif data == 'confirm':
-            msg = await context.bot.send_message(update.effective_chat.id, "Kino yilini kiriting:")
-            context.user_data['last_msg'] = msg.message_id
+            msg = await context.bot.send_message(
+                update.effective_chat.id,
+                "📅 <b>Kino yilini kiriting:</b>\n\nMasalan: <code>2024</code>",
+                parse_mode="HTML",
+                direct=True,
+            )
+            if msg:
+                context.user_data['last_msg'] = msg.message_id
             return GET_COUNTRY
 
 
@@ -251,8 +299,14 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     movie_year = update.message.text
     if not movie_year.isdigit():
-        msg = await context.bot.send_message(update.effective_chat.id, "Iltimos faqat son kiriting:")
-        context.user_data['last_msg'] = msg.message_id
+        msg = await context.bot.send_message(
+            update.effective_chat.id,
+            "⚠️ <b>Iltimos, yilni faqat son ko'rinishida kiriting.</b>",
+            parse_mode="HTML",
+            direct=True,
+        )
+        if msg:
+            context.user_data['last_msg'] = msg.message_id
         return GET_COUNTRY
 
     context.user_data['movie_year'] = int(movie_year)
@@ -268,8 +322,15 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard = InlineKeyboardMarkup(qualities)
 
-    msg = await context.bot.send_message(update.effective_chat.id, "Kino sifatini tanlang:", reply_markup=keyboard)
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_message(
+        update.effective_chat.id,
+        "📺 <b>Kino sifatini tanlang:</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_YEAR
 
 
@@ -303,8 +364,15 @@ async def get_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = InlineKeyboardMarkup(language_btn)
 
-    msg = await context.bot.send_message(update.effective_chat.id, "Kino tilini tanlang:", reply_markup=keyboard)
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_message(
+        update.effective_chat.id,
+        "🗣 <b>Kino tilini tanlang:</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_QUALITY
 
 
@@ -326,8 +394,14 @@ async def get_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['language'] = language
 
-    msg = await context.bot.send_message(update.effective_chat.id, "Kino davomiyligini kiriting(minutlarda, agar bo'sh qoldirmoqchi bo'lsangiz . belgisini kiriting):")
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_message(
+        update.effective_chat.id,
+        "⏱ <b>Kino davomiyligini kiriting (minutlarda):</b>\n\nBo'sh qoldirish uchun <code>.</code> yuboring.",
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_LANGUAGE
 
 
@@ -344,8 +418,14 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     movie_duration = update.message.text
     if not movie_duration.isdigit() and movie_duration != ".":
-        msg = await context.bot.send_message(update.effective_chat.id, "Iltimos faqat son yoki . kiriting:")
-        context.user_data['last_msg'] = msg.message_id
+        msg = await context.bot.send_message(
+            update.effective_chat.id,
+            "⚠️ <b>Iltimos, faqat son yoki <code>.</code> kiriting.</b>",
+            parse_mode="HTML",
+            direct=True,
+        )
+        if msg:
+            context.user_data['last_msg'] = msg.message_id
         return GET_LANGUAGE
 
     if movie_duration != '.':
@@ -353,8 +433,14 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         context.user_data['movie_duration'] = movie_duration
 
-    msg = await context.bot.send_message(update.effective_chat.id, "Kino haqida ma'lumot kiritng(agar bo'sh qoldirmoqchi bo'lsangiz . belgisini kiriting):")
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_message(
+        update.effective_chat.id,
+        "📝 <b>Kino haqida qisqacha ma'lumot kiriting:</b>\n\nBo'sh qoldirish uchun <code>.</code> yuboring.",
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_DURATION
 
 
@@ -372,8 +458,14 @@ async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     movie_description = update.message.text
     context.user_data['movie_description'] = movie_description
 
-    msg = await context.bot.send_message(update.effective_chat.id, "Kinoni yuboring:")
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_message(
+        update.effective_chat.id,
+        "🎞 <b>Endi kino faylini yuboring:</b>",
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return GET_DESCRIPTION
 
 
@@ -388,16 +480,22 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video = update.message.video
 
     if not video:
-        msg = await context.bot.send_message(update.effective_chat.id, "Iltimos faqat filmni yuboring")
-        context.user_data['last_msg'] = msg.message_id
+        msg = await context.bot.send_message(
+            update.effective_chat.id,
+            "⚠️ <b>Iltimos, faqat video fayl yuboring.</b>",
+            parse_mode="HTML",
+            direct=True,
+        )
+        if msg:
+            context.user_data['last_msg'] = msg.message_id
         return GET_DESCRIPTION
 
     context.user_data['file_id'] = video.file_id
 
     confirm_btns = [
         [
-            InlineKeyboardButton("Tasdiqlash", callback_data='movie:confirm:add'),
-            InlineKeyboardButton("Bekor qilish", callback_data='movie:reject:add')
+            InlineKeyboardButton("✅ Tasdiqlash", callback_data='movie:confirm:add'),
+            InlineKeyboardButton("❌ Bekor qilish", callback_data='movie:reject:add')
         ]
     ]
 
@@ -407,23 +505,41 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     countries = await Countries.filter(country_id__in=context.user_data.get('countries', []))
     countries_name = ", ".join(c.name for c in countries)
+    duration_text = (
+        escape(str(context.user_data['movie_duration']))
+        if context.user_data['movie_duration'] != "."
+        else "Ko'rsatilmagan"
+    )
+    description_text = (
+        escape(str(context.user_data['movie_description']))
+        if context.user_data['movie_description'] != "."
+        else "Ko'rsatilmagan"
+    )
 
-    text = f"""KINO
-Nomi: {context.user_data['movie_name']}
-Kodi: {context.user_data['movie_code']}
-Janrlar: {genres_name}
-Davlatlar: {countries_name}
-Yili: {context.user_data['movie_year']}
-Sifati: {context.user_data['quatity']}
-Tili: {context.user_data['language']}
-Davomiyligi: {context.user_data['movie_duration'] if context.user_data['movie_duration'] != '.' else "Ko'rsatilmagan"}
-Kino haqida: {context.user_data['movie_description'] if context.user_data['movie_description'] != '.' else "Ko'rsatilmagan"}
+    text = (
+        f"🎬 <b>Kino ma'lumotlarini tekshiring</b>\n\n"
+        f"🏷 <b>Nomi:</b> {escape(str(context.user_data['movie_name']))}\n"
+        f"🔢 <b>Kodi:</b> {escape(str(context.user_data['movie_code']))}\n"
+        f"🎭 <b>Janrlar:</b> {escape(genres_name or 'Tanlanmagan')}\n"
+        f"🌍 <b>Davlatlar:</b> {escape(countries_name or 'Tanlanmagan')}\n"
+        f"📅 <b>Yili:</b> {escape(str(context.user_data['movie_year']))}\n"
+        f"📺 <b>Sifati:</b> {escape(str(context.user_data['quatity']))}\n"
+        f"🗣 <b>Tili:</b> {escape(str(context.user_data['language']))}\n"
+        f"⏱ <b>Davomiyligi:</b> {duration_text}\n"
+        f"📝 <b>Kino haqida:</b> {description_text}\n\n"
+        f"Tasdiqlaysizmi?"
+    )
 
-Tasdiqlaysizmi?
-"""
-
-    msg = await context.bot.send_video(update.effective_chat.id, context.user_data['file_id'], caption=text, reply_markup=keyboard)
-    context.user_data['last_msg'] = msg.message_id
+    msg = await context.bot.send_video(
+        update.effective_chat.id,
+        context.user_data['file_id'],
+        caption=text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        direct=True,
+    )
+    if msg:
+        context.user_data['last_msg'] = msg.message_id
     return SAVE_DATA
 
 
@@ -466,7 +582,11 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 countries = await Countries.filter(country_id__in=country_ids)
                 await movie.movie_country.add(*countries)
 
-            await query.message.reply_text(f"✅ <b>{movie.movie_name}</b> muvaffaqiyatli bazaga qo'shildi!", parse_mode="HTML", reply_markup=admin_keyboard)
+            await query.message.reply_text(
+                f"✅ <b>{escape(movie.movie_name)}</b> muvaffaqiyatli bazaga qo'shildi!",
+                parse_mode="HTML",
+                reply_markup=admin_keyboard,
+            )
 
             context.user_data.clear()
             return ConversationHandler.END
@@ -476,7 +596,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await error_notificator.notify(context, e, update)
 
     elif action == 'reject':
-        await query.message.reply_text("❌ Jarayon bekor qilindi.", reply_markup=admin_keyboard)
+        await query.message.reply_text("❌ <b>Jarayon bekor qilindi.</b>", reply_markup=admin_keyboard, parse_mode="HTML")
         context.user_data.clear()
         return ConversationHandler.END
 
