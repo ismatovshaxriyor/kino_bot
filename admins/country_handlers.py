@@ -12,7 +12,7 @@ async def get_country_btns():
     if countries:
         btns = []
         for i, country in enumerate(countries):
-            btn = InlineKeyboardButton(text=f"{country.name}", callback_data=f"country_{country.country_id}")
+            btn = InlineKeyboardButton(text=f"🌍 {country.name}", callback_data=f"country_{country.country_id}")
             btns.append(btn)
             if i % 2 == 1:
                 country_btns.append(btns)
@@ -21,11 +21,11 @@ async def get_country_btns():
         if btns:
             country_btns.append(btns)
 
-        country_btns += [[InlineKeyboardButton('Davlat qo\'shish', callback_data='country_add')]]
+        country_btns += [[InlineKeyboardButton('➕ Davlat qo\'shish', callback_data='country_add')]]
         keyboard = InlineKeyboardMarkup(country_btns)
 
     else:
-        country_btns += [[InlineKeyboardButton('Davlat qo\'shish', callback_data='country_add')]]
+        country_btns += [[InlineKeyboardButton('➕ Davlat qo\'shish', callback_data='country_add')]]
         keyboard = InlineKeyboardMarkup(country_btns)
         i = 1
 
@@ -36,9 +36,9 @@ async def get_countries(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         country_btns, i = await get_country_btns()
         if i == 1:
-            await update.message.reply_text("Davlat topilmadi.", reply_markup=country_btns)
+            await update.message.reply_text("📭 Davlatlar topilmadi.", reply_markup=country_btns)
         else:
-            await update.message.reply_text("Davlatlar:", reply_markup=country_btns)
+            await update.message.reply_text("🌍 <b>Davlatlar ro'yxati:</b>", reply_markup=country_btns, parse_mode="HTML")
     except Exception as e:
         await error_notificator.notify(context, e, update)
 

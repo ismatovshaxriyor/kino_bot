@@ -14,7 +14,7 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         context.user_data['state'] = "WAITING_MANAGER_ID"
 
-        await update.effective_message.reply_text("Yangi managerning Idsini kiriting:")
+        await update.effective_message.reply_text("✍️ Yangi manager Telegram ID sini kiriting:")
 
     elif data_sp[1].isdigit():
         manager_id = data_sp[1]
@@ -23,39 +23,39 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if manager:
             btns = [
                 [
-                    InlineKeyboardButton("O'chirish", callback_data=f"manager_delete_{manager_id}"),
-                    InlineKeyboardButton("Ortga qaytish", callback_data='manager_back')
+                    InlineKeyboardButton("🗑 O'chirish", callback_data=f"manager_delete_{manager_id}"),
+                    InlineKeyboardButton("⬅️ Ortga", callback_data='manager_back')
                 ]
             ]
             keyboard = InlineKeyboardMarkup(btns)
 
-            await query.edit_message_text(f"Manager: {manager.first_name}\n\nharakatni tanlang:", reply_markup=keyboard)
+            await query.edit_message_text(f"👤 <b>Manager:</b> {manager.first_name}\n\n👇 Harakatni tanlang:", reply_markup=keyboard, parse_mode="HTML")
         else:
-            btn = [[InlineKeyboardButton("Ortga qaytish", callback_data='manager_back')]]
+            btn = [[InlineKeyboardButton("⬅️ Ortga", callback_data='manager_back')]]
             keyboard = InlineKeyboardMarkup(btn)
-            await query.edit_message_text(f"Manager allaqachon o'chirilgan", reply_markup=keyboard)
+            await query.edit_message_text("⚠️ Manager allaqachon o'chirilgan", reply_markup=keyboard)
 
     elif data_sp[1] == 'delete':
         manager_id = data_sp[2]
 
         confirm_btns = [
             [
-                InlineKeyboardButton(text='Tasdiqlash', callback_data=f'confirm_manager_delete_{manager_id}'),
-                InlineKeyboardButton(text='Bekor qilish', callback_data='reject_manager_delete')
+                InlineKeyboardButton(text='✅ Tasdiqlash', callback_data=f'confirm_manager_delete_{manager_id}'),
+                InlineKeyboardButton(text='❌ Bekor qilish', callback_data='reject_manager_delete')
             ]
         ]
 
         manager = await User.get(id=manager_id)
         keyboard = InlineKeyboardMarkup(confirm_btns)
-        await query.edit_message_text(f"Manager: {manager.first_name}\n\nO'chirishni tasdiqlang.", reply_markup=keyboard)
+        await query.edit_message_text(f"⚠️ <b>Manager:</b> {manager.first_name}\n\n🗑 O'chirishni tasdiqlaysizmi?", reply_markup=keyboard, parse_mode="HTML")
 
     elif data_sp[1] == 'back':
         keyboard, i = await get_managers_btns()
 
         if i == 1:
-            await query.edit_message_text("Managerlar topilmadi.", reply_markup=keyboard)
+            await query.edit_message_text("📭 Managerlar topilmadi.", reply_markup=keyboard)
         else:
-            await query.edit_message_text('Managerlar:', reply_markup=keyboard)
+            await query.edit_message_text('👥 <b>Managerlar ro\'yxati:</b>', reply_markup=keyboard, parse_mode="HTML")
 
 
 

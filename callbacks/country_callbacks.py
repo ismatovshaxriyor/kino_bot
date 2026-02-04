@@ -14,7 +14,7 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         context.user_data['state'] = "WAITING_COUNTRY_NAME"
 
-        await update.effective_message.reply_text("Yangi davlatni kiriting:")
+        await update.effective_message.reply_text("✍️ Yangi davlat nomini kiriting:")
 
     elif data_sp[1].isdigit():
         country_id = data_sp[1]
@@ -23,40 +23,40 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if country:
             btns = [
                 [
-                    InlineKeyboardButton("O'chirish", callback_data=f"country_delete_{country_id}"),
-                    InlineKeyboardButton("Ortga qaytish", callback_data='country_back')
+                    InlineKeyboardButton("🗑 O'chirish", callback_data=f"country_delete_{country_id}"),
+                    InlineKeyboardButton("⬅️ Ortga", callback_data='country_back')
                 ]
             ]
             keyboard = InlineKeyboardMarkup(btns)
 
-            await query.edit_message_text(f"Davlat: {country.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+            await query.edit_message_text(f"🌍 <b>Davlat:</b> {country.name}\n\n👇 Harakatni tanlang:", reply_markup=keyboard, parse_mode="HTML")
         else:
-            btn = [[InlineKeyboardButton("Ortga qaytish", callback_data='country_back')]]
+            btn = [[InlineKeyboardButton("⬅️ Ortga", callback_data='country_back')]]
             keyboard = InlineKeyboardMarkup(btn)
 
-            await query.edit_message_text(f"Davlat: {country.name}\n\n harakatni tanlang:", reply_markup=keyboard)
+            await query.edit_message_text("⚠️ Davlat allaqachon o'chirilgan.", reply_markup=keyboard)
 
     elif data_sp[1] == 'delete':
         country_id = data_sp[2]
 
         confirm_btns = [
             [
-                InlineKeyboardButton(text='Tasdiqlash', callback_data=f'confirm_country_delete_{country_id}'),
-                InlineKeyboardButton(text='Bekor qilish', callback_data='reject_country_delete')
+                InlineKeyboardButton(text='✅ Tasdiqlash', callback_data=f'confirm_country_delete_{country_id}'),
+                InlineKeyboardButton(text='❌ Bekor qilish', callback_data='reject_country_delete')
             ]
         ]
 
         country = await Countries.get(country_id=country_id)
         keyboard = InlineKeyboardMarkup(confirm_btns)
-        await query.edit_message_text(f"Davlat: {country.name}\n\nO'chirishni tasdiqlang.", reply_markup=keyboard)
+        await query.edit_message_text(f"⚠️ <b>Davlat:</b> {country.name}\n\n🗑 O'chirishni tasdiqlaysizmi?", reply_markup=keyboard, parse_mode="HTML")
 
     elif data_sp[1] == 'back':
         keyboard, i = await get_country_btns()
 
         if i == 1:
-            await query.edit_message_text("Davlatlar topilmadi.", reply_markup=keyboard)
+            await query.edit_message_text("📭 Davlatlar topilmadi.", reply_markup=keyboard)
         else:
-            await query.edit_message_text('Davlatlar:', reply_markup=keyboard)
+            await query.edit_message_text('🌍 <b>Davlatlar ro\'yxati:</b>', reply_markup=keyboard, parse_mode="HTML")
 
 
 

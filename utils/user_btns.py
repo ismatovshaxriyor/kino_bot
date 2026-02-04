@@ -3,12 +3,12 @@ from telegram import KeyboardButton, ReplyKeyboardMarkup
 
 user_btns = [
     [
-        KeyboardButton("Nomi bo'yicha"),
-        KeyboardButton("Janr bo'yicha"),
+        KeyboardButton("🔍 Nomi bo'yicha"),
+        KeyboardButton("🎭 Janr bo'yicha"),
     ],
     [
-        KeyboardButton("Yil bo'yicha"),
-        KeyboardButton("AI yordamchi")
+        KeyboardButton("📅 Yil bo'yicha"),
+        KeyboardButton("🤖 AI yordamchi")
     ],
 ]
 
