@@ -2,6 +2,7 @@ import json
 import asyncio
 import redis.asyncio as redis
 from telegram import Bot
+from telegram.error import BadRequest
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -135,11 +136,31 @@ async def run_worker(bot_token: str):
                 args = msg['args']
 
                 if method == "send_message":
-                    await _original_send_message(bot, chat_id=chat_id, text=content, **args)
+                    try:
+                        await _original_send_message(bot, chat_id=chat_id, text=content, **args)
+                    except BadRequest as e:
+                        if "parse entities" in str(e).lower():
+                            safe_args = dict(args)
+                            safe_args.pop("parse_mode", None)
+                            await _original_send_message(bot, chat_id=chat_id, text=content, **safe_args)
+                        else:
+                            raise
                     print(f"✅ MSG: {chat_id}")
 
                 elif method == "send_video":
-                    await _original_send_video(bot, chat_id=chat_id, video=content, **args)
+                    try:
+                        await _original_send_video(bot, chat_id=chat_id, video=content, **args)
+                    except BadRequest as e:
+                        # If file_id is invalid for this bot, send caption/text fallback.
+                        if "wrong file identifier" in str(e).lower():
+                            fallback_text = args.get("caption") or "⚠️ Bu video fayli endi mavjud emas yoki noto'g'ri."
+                            fallback_args = dict(args)
+                            fallback_args.pop("caption", None)
+                            fallback_args.pop("parse_mode", None)
+                            fallback_args.pop("reply_markup", None)
+                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text, **fallback_args)
+                        else:
+                            raise
                     print(f"✅ VID: {chat_id}")
 
                 elif method == "edit_message_text":

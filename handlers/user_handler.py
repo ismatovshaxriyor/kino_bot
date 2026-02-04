@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from database import Genre, Movie
-from utils.decorators import channel_subscription_required
+from utils.decorators import channel_subscription_required, user_registered_required
 
 
 MOVIES_PER_PAGE = 5
@@ -77,6 +77,7 @@ async def get_movies_keyboard(movies, page: int, total_pages: int, filter_type: 
     return InlineKeyboardMarkup(btns)
 
 
+@user_registered_required
 @channel_subscription_required
 async def search_by_name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """🔍 Nomi bo'yicha qidirish"""
@@ -90,6 +91,7 @@ async def search_by_name_handler(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
+@user_registered_required
 @channel_subscription_required
 async def search_by_genre_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """🎭 Janr bo'yicha qidirish"""
@@ -103,6 +105,7 @@ async def search_by_genre_handler(update: Update, context: ContextTypes.DEFAULT_
     )
 
 
+@user_registered_required
 @channel_subscription_required
 async def search_by_year_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """📅 Yil bo'yicha qidirish"""
@@ -116,6 +119,7 @@ async def search_by_year_handler(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
+@user_registered_required
 @channel_subscription_required
 async def ai_assistant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """🤖 AI yordamchi"""

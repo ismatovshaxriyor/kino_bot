@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 from math import ceil
 
 from database import User, UserMovieHistory
-from utils.decorators import channel_subscription_required
+from utils.decorators import channel_subscription_required, user_registered_required
 
 MOVIES_PER_PAGE = 5
 
@@ -43,6 +43,7 @@ async def get_history_keyboard(user_id, page: int = 1):
     return InlineKeyboardMarkup(btns), total, total_pages
 
 
+@user_registered_required
 @channel_subscription_required
 async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/history komandasi handleri"""

@@ -12,6 +12,9 @@ admin_btns = [
     [
         KeyboardButton("📢 Kanallar"),
         KeyboardButton("📊 Statistika")
+    ],
+    [
+        KeyboardButton("🔙 Ortga")
     ]
 ]
 
@@ -20,6 +23,5 @@ admin_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,
     one_time_keyboard=False
 )
-
 
 

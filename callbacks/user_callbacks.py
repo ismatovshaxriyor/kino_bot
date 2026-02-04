@@ -5,6 +5,7 @@ from math import ceil
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
+from utils.decorators import user_registered_required
 from handlers.history_handler import get_history_keyboard
 from handlers.top_handler import get_top_keyboard
 
@@ -61,6 +62,7 @@ async def get_movies_keyboard(movies, page: int, total_pages: int, filter_type: 
     return InlineKeyboardMarkup(btns)
 
 
+@user_registered_required
 async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """User qidiruv callbacklari"""
     query = update.callback_query
@@ -173,7 +175,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
             f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
             f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-            f"⭐ <b>Reyting:</b> {movie.average_rating}/10 ({movie.rating_count} ovoz)\n"
+            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
         )
 
         if movie.movie_description:
@@ -323,7 +325,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.answer(f"✅ {score} ⭐ baho qo'yildi!", show_alert=True)
 
-        new_rating_text = f"⭐ <b>Reyting:</b> {movie.average_rating}/10 ({movie.rating_count} ovoz)"
+        new_rating_text = f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)"
 
         genres = await movie.movie_genre.all()
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"

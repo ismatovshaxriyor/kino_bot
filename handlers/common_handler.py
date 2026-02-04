@@ -7,7 +7,7 @@ from math import ceil
 from services import ai_assistant
 from database import User, Movie, UserMovieHistory, Rating
 from utils import error_notificator, ADMIN_ID, MANAGER_ID
-from utils.decorators import channel_subscription_required
+from utils.decorators import channel_subscription_required, user_registered_required
 
 DAILY_LIMIT = 3
 MOVIES_PER_PAGE = 5
@@ -26,6 +26,7 @@ async def increase_ai_usage(user: User):
     user.ai_usage += 1
     await user.save()
 
+@user_registered_required
 @channel_subscription_required
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('state')
@@ -141,7 +142,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
                     f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
                     f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-                    f"⭐ <b>Reyting:</b> {movie.average_rating}/10 ({movie.rating_count} ovoz)\n\n"
+                    f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n\n"
                 )
 
                 if movie.movie_description:
@@ -193,4 +194,3 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🔄 Boshqa kod bilan urinib ko'ring.",
                     parse_mode="HTML"
                 )
-

@@ -65,3 +65,28 @@ def channel_subscription_required(func):
 
         return await func(update, context, *args, **kwargs)
     return wrapper
+
+
+def user_registered_required(func):
+    """
+    Foydalanuvchi bazada mavjudligini tekshiradi.
+    Mavjud bo'lmasa /start bosishni so'raydi.
+    """
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        from database import User
+
+        user_id = update.effective_user.id
+        user = await User.get_or_none(telegram_id=user_id)
+        if user is not None:
+            return await func(update, context, *args, **kwargs)
+
+        text = "⚠️ Siz hali ro'yxatdan o'tmagansiz.\n\nIltimos avval /start buyrug'ini bosing."
+        if update.callback_query:
+            await update.callback_query.answer("Avval /start bosing", show_alert=True)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+        elif update.message:
+            await update.message.reply_text(text)
+        return None
+
+    return wrapper

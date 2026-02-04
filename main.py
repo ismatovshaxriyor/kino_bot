@@ -1,5 +1,5 @@
 from admins import get_channels
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, InlineQueryHandler, MessageHandler, filters
 from telegram import Update
 
 from handlers import *
@@ -15,9 +15,11 @@ def main():
     bot = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     bot.add_handler(CommandHandler('start', start_handler))
+    bot.add_handler(CommandHandler("kino", inline_movie_command_handler))
     bot.add_handler(CommandHandler("admin", admin_handler))
     bot.add_handler(CommandHandler("history", history_handler))
     bot.add_handler(CommandHandler("top", top_handler))
+    bot.add_handler(InlineQueryHandler(inline_query_handler))
 
     bot.add_handler(add_movie_conf_handler)
     bot.add_handler(edit_movie_handler)
@@ -29,6 +31,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar"), get_movies))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar"), get_channels))
     bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika"), statistics_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga"), admin_back_handler))
 
     # User handlers
     bot.add_handler(MessageHandler(filters.Regex(r"🔍 Nomi bo'yicha"), search_by_name_handler))
@@ -36,7 +39,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"📅 Yil bo'yicha"), search_by_year_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi"), ai_assistant_handler))
 
-    bot.add_handler(MessageHandler(filters.TEXT, message_handler))
+    bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
     # Callbacks
     bot.add_handler(CallbackQueryHandler(movie_callback, pattern=r"^movie_"))
