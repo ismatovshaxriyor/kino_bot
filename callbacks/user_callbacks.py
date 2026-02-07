@@ -7,7 +7,7 @@ from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from handlers.history_handler import get_history_keyboard
-from handlers.top_handler import get_top_keyboard
+from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_top_title
 
 
 MOVIES_PER_PAGE = 5
@@ -253,17 +253,57 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # Top reyting pagination
-    elif data.startswith("utop_page_"):
-        page = int(data.split("_")[2])
+    # Top filter menyusi
+    elif data == "utop_filter_menu":
+        await query.edit_message_text(
+            "🏆 <b>Top kinolar</b>\n\nKerakli filtrni tanlang:",
+            reply_markup=get_top_filter_keyboard(),
+            parse_mode="HTML",
+        )
 
-        keyboard, total, total_pages = await get_top_keyboard(page)
+    # Top filter tanlash
+    elif data.startswith("utop_filter_"):
+        filter_type = data.split("_")[2]
+        keyboard, total, total_pages = await get_top_keyboard(filter_type, 1)
+
+        if total == 0:
+            await query.edit_message_text(
+                "📭 Hozircha bu filtr bo'yicha kinolar yo'q.",
+                reply_markup=get_top_filter_keyboard(),
+            )
+            return
 
         await query.edit_message_text(
-            f"🏆 <b>Top Reyting Kinolar:</b>\n\n"
+            f"{get_top_title(filter_type)}\n\n"
             f"📊 Jami: {total} ta kino",
             reply_markup=keyboard,
-            parse_mode="HTML"
+            parse_mode="HTML",
+        )
+
+    # Top pagination
+    elif data.startswith("utop_page_"):
+        parts = data.split("_")
+        if len(parts) == 3 and parts[2].isdigit():
+            filter_type = "rating"
+            page = int(parts[2])
+        else:
+            filter_type = parts[2]
+            page = int(parts[3])
+
+        keyboard, total, total_pages = await get_top_keyboard(filter_type, page)
+
+        if total == 0:
+            await query.edit_message_text(
+                "📭 Hozircha bu filtr bo'yicha kinolar yo'q.",
+                reply_markup=get_top_filter_keyboard(),
+            )
+            return
+
+        await query.edit_message_text(
+            f"{get_top_title(filter_type)}\n\n"
+            f"📊 Jami: {total} ta kino",
+            reply_markup=keyboard,
+            parse_mode="HTML",
         )
 
     # Baholash tugmasi bosilganda
@@ -278,7 +318,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  InlineKeyboardButton("4 ⭐", callback_data=f"set_rating_{movie_id}_4"),
                  InlineKeyboardButton("5 ⭐", callback_data=f"set_rating_{movie_id}_5"),
              ],
-             [InlineKeyboardButton("❌ Bekor qilish", callback_data="noop")]
+             [InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_rating_{movie_id}")]
         ]
         keyboard = InlineKeyboardMarkup(btns)
 
@@ -297,6 +337,59 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  reply_markup=keyboard,
                  parse_mode="HTML"
              )
+
+    # Baholashni bekor qilish
+    elif data.startswith("cancel_rating_"):
+        movie_id = int(data.split("_")[2])
+        user_id = update.effective_user.id
+
+        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
+        user = await User.get_or_none(telegram_id=user_id)
+
+        if not movie or not user:
+            await query.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+            return
+
+        genres = await movie.movie_genre.all()
+        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
+        countries = await movie.movie_country.all()
+        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
+
+        movie_info = (
+            f"🎬 <b>{movie.movie_name}</b>\n\n"
+            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
+            f"🎭 <b>Janr:</b> {genres_text}\n"
+            f"🌍 <b>Davlat:</b> {countries_text}\n"
+            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
+            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
+            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
+            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
+        )
+        if movie.movie_description:
+            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
+            movie_info += f"\n📝 <b>Tavsif:</b> {desc}\n"
+        movie_info += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
+
+        btns = []
+        has_rated = await Rating.exists(user=user, movie=movie)
+        if not has_rated:
+            btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
+        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
+            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+        reply_markup = InlineKeyboardMarkup(btns) if btns else None
+
+        if query.message.caption:
+            await query.edit_message_caption(
+                caption=movie_info,
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
+        else:
+            await query.edit_message_text(
+                text=movie_info,
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
 
     # Bahoni saqlash
     elif data.startswith("set_rating_"):

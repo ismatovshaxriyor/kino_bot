@@ -7,6 +7,7 @@ user_btns = [
         KeyboardButton("📅 Yil bo'yicha"),
     ],
     [
+        KeyboardButton("🏆 Top kinolar"),
         KeyboardButton("🤖 AI yordamchi")
     ],
 ]
@@ -16,5 +17,4 @@ user_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,
     one_time_keyboard=False
 )
-
 
