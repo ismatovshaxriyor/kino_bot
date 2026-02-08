@@ -7,7 +7,7 @@ from tortoise.functions import Count
 from database import Movie
 from utils.decorators import channel_subscription_required, user_registered_required
 
-MOVIES_PER_PAGE = 5
+MOVIES_PER_PAGE = 15
 TOP_FILTERS = {
     "views": "Ko'rishlar bo'yicha",
     "rating": "Reyting bo'yicha",

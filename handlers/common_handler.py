@@ -10,7 +10,7 @@ from utils import error_notificator, ADMIN_ID, MANAGER_ID
 from utils.decorators import channel_subscription_required, user_registered_required
 
 DAILY_LIMIT = 3
-MOVIES_PER_PAGE = 5
+MOVIES_PER_PAGE = 15
 
 async def can_use_ai(user: User) -> bool:
     today = date.today()

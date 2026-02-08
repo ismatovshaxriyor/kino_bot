@@ -10,7 +10,7 @@ from handlers.history_handler import get_history_keyboard
 from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_top_title
 
 
-MOVIES_PER_PAGE = 5
+MOVIES_PER_PAGE = 15
 
 
 async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 1):
