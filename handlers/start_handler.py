@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes
 
 from database import User
@@ -49,11 +49,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🔎 Kino izlash", switch_inline_query_current_chat="")]
         ])
         caption = _start_caption(first_name, created)
+        welcome_message = None
 
         try:
             if START_IMAGE_PATH.exists():
                 with START_IMAGE_PATH.open("rb") as img:
-                    await update.message.reply_photo(
+                    welcome_message = await update.message.reply_photo(
                         photo=img,
                         caption=caption,
                         parse_mode="HTML",
@@ -63,12 +64,22 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 raise FileNotFoundError("IMG_7403.PNG topilmadi")
         except (BadRequest, OSError):
             # Fallback: old text welcome if image cannot be sent.
-            await update.message.reply_text(caption, parse_mode="HTML")
+            welcome_message = await update.message.reply_text(caption, parse_mode="HTML")
+
+        if welcome_message:
+            try:
+                await context.bot.pin_chat_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=welcome_message.message_id,
+                    disable_notification=True,
+                )
+            except (BadRequest, Forbidden):
+                # Private chats or missing pin permissions.
+                pass
 
         await update.message.reply_text("👇 Menyu:", reply_markup=user_keyboard)
 
     except Exception as e:
         await error_notificator.notify(context, e, update)
-
 
 

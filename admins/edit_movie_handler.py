@@ -7,6 +7,11 @@ from utils import error_notificator, get_movies_page
 from admins.movie_handlers import get_movies_keyboard
 
 SELECTING_ACTION, WAITING_INPUT = range(2)
+EDIT_MENU_PATTERN = (
+    r"^(cancel_edit$|delete_confirm$|delete_yes$|delete_no$|"
+    r"edit_field_(name|year|code|quality|lang|desc|file)$|"
+    r"set_quality_|set_lang_|back_to_menu$)"
+)
 
 @admin_required
 async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie_id: int = None):
@@ -217,7 +222,8 @@ async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 edit_movie_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$")],
     states={
-        SELECTING_ACTION: [CallbackQueryHandler(select_field_callback)],
+        # Restrict edit flow callbacks, otherwise this conversation can swallow unrelated inline buttons.
+        SELECTING_ACTION: [CallbackQueryHandler(select_field_callback, pattern=EDIT_MENU_PATTERN)],
         WAITING_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value)]
     },
     fallbacks=[CommandHandler('cancel', cancel_edit)],
