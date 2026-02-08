@@ -42,6 +42,41 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard, i = await get_genre_btns()
                 await query.edit_message_text("❌ Janrni o'chirish bekor qilindi.", reply_markup=keyboard)
 
+        elif data_sp[2] == 'edit':
+            if data_sp[0] == 'confirm':
+                try:
+                    genre_id = int(data_sp[3])
+                    new_name = context.user_data.pop('edit_genre_name', None)
+                    context.user_data.pop('edit_genre_id', None)
+                    context.user_data.pop('state', None)
+
+                    keyboard, i = await get_genre_btns()
+                    if not new_name:
+                        await query.edit_message_text("⚠️ Yangi janr nomi topilmadi.", reply_markup=keyboard)
+                        return
+
+                    exists = await Genre.get_or_none(name=new_name)
+                    if exists and exists.genre_id != genre_id:
+                        await query.edit_message_text("⚠️ Bu janr nomi allaqachon mavjud.", reply_markup=keyboard)
+                        return
+
+                    genre = await Genre.get_or_none(genre_id=genre_id)
+                    if not genre:
+                        await query.edit_message_text("⚠️ Janr topilmadi.", reply_markup=keyboard)
+                        return
+
+                    genre.name = new_name
+                    await genre.save()
+                    await query.edit_message_text("✅ Janr muvaffaqiyatli yangilandi!", reply_markup=keyboard)
+                except Exception as e:
+                    await error_notificator.notify(context, e, update)
+            else:
+                keyboard, i = await get_genre_btns()
+                context.user_data.pop('edit_genre_name', None)
+                context.user_data.pop('edit_genre_id', None)
+                context.user_data.pop('state', None)
+                await query.edit_message_text("❌ Janrni tahrirlash bekor qilindi.", reply_markup=keyboard)
+
 
     elif data_sp[1] == 'country':
         if data_sp[2] == 'add':
@@ -79,6 +114,41 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard, i = await get_country_btns()
                 await query.edit_message_text("❌ Davlatni o'chirish bekor qilindi.", reply_markup=keyboard)
+
+        elif data_sp[2] == 'edit':
+            if data_sp[0] == 'confirm':
+                try:
+                    country_id = int(data_sp[3])
+                    new_name = context.user_data.pop('edit_country_name', None)
+                    context.user_data.pop('edit_country_id', None)
+                    context.user_data.pop('state', None)
+
+                    keyboard, i = await get_country_btns()
+                    if not new_name:
+                        await query.edit_message_text("⚠️ Yangi davlat nomi topilmadi.", reply_markup=keyboard)
+                        return
+
+                    exists = await Countries.get_or_none(name=new_name)
+                    if exists and exists.country_id != country_id:
+                        await query.edit_message_text("⚠️ Bu davlat nomi allaqachon mavjud.", reply_markup=keyboard)
+                        return
+
+                    country = await Countries.get_or_none(country_id=country_id)
+                    if not country:
+                        await query.edit_message_text("⚠️ Davlat topilmadi.", reply_markup=keyboard)
+                        return
+
+                    country.name = new_name
+                    await country.save()
+                    await query.edit_message_text("✅ Davlat muvaffaqiyatli yangilandi!", reply_markup=keyboard)
+                except Exception as e:
+                    await error_notificator.notify(context, e, update)
+            else:
+                keyboard, i = await get_country_btns()
+                context.user_data.pop('edit_country_name', None)
+                context.user_data.pop('edit_country_id', None)
+                context.user_data.pop('state', None)
+                await query.edit_message_text("❌ Davlatni tahrirlash bekor qilindi.", reply_markup=keyboard)
 
     elif data_sp[1] == 'manager':
         if data_sp[2] == 'add':

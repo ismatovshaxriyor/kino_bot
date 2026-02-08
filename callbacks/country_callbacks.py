@@ -23,7 +23,10 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if country:
             btns = [
                 [
+                    InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"country_edit_{country_id}"),
                     InlineKeyboardButton("🗑 O'chirish", callback_data=f"country_delete_{country_id}"),
+                ],
+                [
                     InlineKeyboardButton("⬅️ Ortga", callback_data='country_back')
                 ]
             ]
@@ -35,6 +38,24 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = InlineKeyboardMarkup(btn)
 
             await query.edit_message_text("⚠️ Davlat allaqachon o'chirilgan.", reply_markup=keyboard)
+
+    elif data_sp[1] == "edit":
+        country_id = data_sp[2]
+        country = await Countries.get_or_none(country_id=country_id)
+        if not country:
+            btn = [[InlineKeyboardButton("⬅️ Ortga", callback_data='country_back')]]
+            await query.edit_message_text("⚠️ Davlat topilmadi.", reply_markup=InlineKeyboardMarkup(btn))
+            return
+
+        context.user_data["state"] = "WAITING_COUNTRY_EDIT_NAME"
+        context.user_data["edit_country_id"] = int(country_id)
+
+        await query.edit_message_text(
+            f"✍️ <b>Davlatni tahrirlash</b>\n\n"
+            f"Joriy nom: <b>{country.name}</b>\n"
+            "Yangi nomni yuboring:",
+            parse_mode="HTML",
+        )
 
     elif data_sp[1] == 'delete':
         country_id = data_sp[2]
@@ -57,6 +78,4 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("📭 Davlatlar topilmadi.", reply_markup=keyboard)
         else:
             await query.edit_message_text('🌍 <b>Davlatlar ro\'yxati:</b>', reply_markup=keyboard, parse_mode="HTML")
-
-
 

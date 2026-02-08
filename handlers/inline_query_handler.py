@@ -1,4 +1,5 @@
 import re
+import logging
 from html import escape
 
 from telegram import (
@@ -17,6 +18,19 @@ from utils.decorators import channel_subscription_required, user_registered_requ
 
 
 MAX_INLINE_RESULTS = 15
+logger = logging.getLogger(__name__)
+
+
+async def _answer_inline_query_safely(query, results, cache_time: int = 30) -> None:
+    try:
+        await query.answer(results=results, cache_time=cache_time, is_personal=True)
+    except BadRequest as e:
+        msg = str(e).lower()
+        # Inline query expires quickly; in this case we just ignore it.
+        if "query is too old" in msg or "query id is invalid" in msg:
+            logger.warning("Skipped expired inline query answer: %s", e)
+            return
+        raise
 
 
 def _to_result(movie: Movie) -> InlineQueryResultArticle:
@@ -44,7 +58,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     movies: list[Movie] = []
 
     if not q:
-        await query.answer(results=[], cache_time=5, is_personal=True)
+        await _answer_inline_query_safely(query, [], cache_time=5)
         return
     elif q.isdigit():
         # code first
@@ -65,7 +79,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if r:
             results.append(r)
 
-    await query.answer(results=results, cache_time=30, is_personal=True)
+    await _answer_inline_query_safely(query, results, cache_time=30)
 
 
 def _extract_movie_code(raw_arg: str) -> int | None:

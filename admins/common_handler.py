@@ -44,6 +44,58 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
 
         await update.message.reply_text(f"Yangi davlat: {country.capitalize()}. Tasdiqlaysizmi?", reply_markup=confirm_keyboard)
 
+    elif state == "WAITING_GENRE_EDIT_NAME":
+        new_name = update.message.text.strip().capitalize()
+        if not new_name:
+            await update.message.reply_text("Noto'g'ri nom. Qaytadan yuboring.")
+            return
+
+        genre_id = context.user_data.get("edit_genre_id")
+        if not genre_id:
+            context.user_data.pop("state", None)
+            await update.message.reply_text("Jarayon topilmadi, qayta urinib ko'ring.")
+            return
+
+        context.user_data["edit_genre_name"] = new_name
+        context.user_data["state"] = "WAITING_FOR_CONFIRM_GENRE_EDIT"
+
+        confirm_keyboard = InlineKeyboardMarkup(
+            [[
+                InlineKeyboardButton(text='Tasdiqlash', callback_data=f'confirm_genre_edit_{genre_id}'),
+                InlineKeyboardButton(text='Bekor qilish', callback_data=f'reject_genre_edit_{genre_id}')
+            ]]
+        )
+        await update.message.reply_text(
+            f"Janrni yangilash: {new_name}. Tasdiqlaysizmi?",
+            reply_markup=confirm_keyboard
+        )
+
+    elif state == "WAITING_COUNTRY_EDIT_NAME":
+        new_name = update.message.text.strip().capitalize()
+        if not new_name:
+            await update.message.reply_text("Noto'g'ri nom. Qaytadan yuboring.")
+            return
+
+        country_id = context.user_data.get("edit_country_id")
+        if not country_id:
+            context.user_data.pop("state", None)
+            await update.message.reply_text("Jarayon topilmadi, qayta urinib ko'ring.")
+            return
+
+        context.user_data["edit_country_name"] = new_name
+        context.user_data["state"] = "WAITING_FOR_CONFIRM_COUNTRY_EDIT"
+
+        confirm_keyboard = InlineKeyboardMarkup(
+            [[
+                InlineKeyboardButton(text='Tasdiqlash', callback_data=f'confirm_country_edit_{country_id}'),
+                InlineKeyboardButton(text='Bekor qilish', callback_data=f'reject_country_edit_{country_id}')
+            ]]
+        )
+        await update.message.reply_text(
+            f"Davlatni yangilash: {new_name}. Tasdiqlaysizmi?",
+            reply_markup=confirm_keyboard
+        )
+
     elif state == "WAITING_MANAGER_ID":
         keyboard, i = await get_managers_btns()
 

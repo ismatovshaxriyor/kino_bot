@@ -9,7 +9,7 @@ from admins.movie_handlers import get_movies_keyboard
 SELECTING_ACTION, WAITING_INPUT = range(2)
 EDIT_MENU_PATTERN = (
     r"^(cancel_edit$|delete_confirm$|delete_yes$|delete_no$|"
-    r"edit_field_(name|year|code|quality|lang|desc|file)$|"
+    r"edit_field_(name|year|code|duration|quality|lang|desc|file)$|"
     r"set_quality_|set_lang_|back_to_menu$)"
 )
 
@@ -34,6 +34,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         [InlineKeyboardButton(f"📝 Nomi: {movie.movie_name[:20]}...", callback_data="edit_field_name")],
         [InlineKeyboardButton(f"📅 Yil: {movie.movie_year or '-'}", callback_data="edit_field_year"),
          InlineKeyboardButton(f"📥 Kod: {movie.movie_code}", callback_data="edit_field_code")],
+        [InlineKeyboardButton(f"⏱ Davomiylik: {movie.movie_duration or '-'} min", callback_data="edit_field_duration")],
 
         [InlineKeyboardButton(f"📺 Sifat: {movie.movie_quality.value if movie.movie_quality else '-'}", callback_data="edit_field_quality"),
          InlineKeyboardButton(f"🗣 Til: {movie.movie_language.value if movie.movie_language else '-'}", callback_data="edit_field_lang")],
@@ -86,9 +87,15 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         movie = await Movie.get_or_none(movie_id=movie_id)
         if movie:
             await movie.delete()
-            await query.edit_message_caption("🗑 <b>Kino muvaffaqiyatli o'chirildi!</b>", parse_mode="HTML", reply_markup=None)
+            if query.message.caption:
+                await query.edit_message_caption("🗑 <b>Kino muvaffaqiyatli o'chirildi!</b>", parse_mode="HTML", reply_markup=None)
+            else:
+                await query.edit_message_text("🗑 <b>Kino muvaffaqiyatli o'chirildi!</b>", parse_mode="HTML", reply_markup=None)
         else:
-            await query.edit_message_caption("⚠️ Kino topilmadi.", reply_markup=None)
+            if query.message.caption:
+                await query.edit_message_caption("⚠️ Kino topilmadi.", reply_markup=None)
+            else:
+                await query.edit_message_text("⚠️ Kino topilmadi.", reply_markup=None)
         return ConversationHandler.END
         context.user_data['state'] = None
 
@@ -137,6 +144,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         'edit_field_name': 'Nomi',
         'edit_field_year': 'Yili',
         'edit_field_code': 'Kodi (Dublicate bo\'lmasligi kerak)',
+        'edit_field_duration': 'Davomiylik (daqiqada)',
         'edit_field_desc': 'Tavsif',
         'edit_field_file': 'Fayl ID (Video)',
     }
@@ -147,11 +155,19 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data['edit_field'] = data
 
-    await query.edit_message_caption(
-        caption=f"✍️ <b>Yangi {field_name}ni kiriting:</b>\n\n(Bekor qilish uchun /cancel bosing)",
-        reply_markup=None, # Keyboardni olib tashlash
-        parse_mode="HTML"
-    )
+    prompt_text = f"✍️ <b>Yangi {field_name}ni kiriting:</b>\n\n(Bekor qilish uchun /cancel bosing)"
+    if query.message.caption:
+        await query.edit_message_caption(
+            caption=prompt_text,
+            reply_markup=None, # Keyboardni olib tashlash
+            parse_mode="HTML"
+        )
+    else:
+        await query.edit_message_text(
+            text=prompt_text,
+            reply_markup=None, # Keyboardni olib tashlash
+            parse_mode="HTML"
+        )
 
     return WAITING_INPUT
 
@@ -184,6 +200,11 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⚠️ Bu kod band!")
                 return WAITING_INPUT
             movie.movie_code = int(new_value)
+        elif edit_field == 'edit_field_duration':
+            if not new_value.isdigit():
+                await update.message.reply_text("⚠️ Davomiylik faqat raqam bo'lishi kerak (daqiqada)!")
+                return WAITING_INPUT
+            movie.movie_duration = int(new_value)
         elif edit_field == 'edit_field_desc':
             movie.movie_description = new_value
         elif edit_field == 'edit_field_file':
