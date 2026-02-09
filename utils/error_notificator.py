@@ -22,7 +22,7 @@ class ErrorNotificator:
         user_info = "N/A"
         chat_info = "N/A"
 
-        if update:
+        if isinstance(update, Update):
             if update.effective_user:
                 u = update.effective_user
                 user_info = f"{u.first_name} (@{u.username or 'None'})"
@@ -30,7 +30,9 @@ class ErrorNotificator:
             if update.effective_chat:
                 chat_info = f"{update.effective_chat.id}"
 
-        tb = traceback.format_exc()[:3000]
+        tb = "".join(traceback.format_exception(type(error), error, error.__traceback__))[:3000]
+        if not tb.strip():
+            tb = "Traceback mavjud emas."
         tb_escaped = html.escape(tb)
 
         message = f"""

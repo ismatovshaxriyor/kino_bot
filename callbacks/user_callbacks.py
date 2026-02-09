@@ -13,6 +13,17 @@ from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_
 MOVIES_PER_PAGE = 15
 
 
+async def _safe_answer(query, *args, **kwargs) -> bool:
+    try:
+        await query.answer(*args, **kwargs)
+        return True
+    except BadRequest as e:
+        msg = str(e).lower()
+        if "query is too old" in msg or "query id is invalid" in msg:
+            return False
+        raise
+
+
 async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 1):
     """Filtrlangan kinolarni olish"""
     offset = (page - 1) * MOVIES_PER_PAGE
@@ -66,7 +77,7 @@ async def get_movies_keyboard(movies, page: int, total_pages: int, filter_type: 
 async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """User qidiruv callbacklari"""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     data = query.data
 
     # Janr tanlash
@@ -347,7 +358,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = await User.get_or_none(telegram_id=user_id)
 
         if not movie or not user:
-            await query.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+            await _safe_answer(query, "⚠️ Xatolik yuz berdi.", show_alert=True)
             return
 
         genres = await movie.movie_genre.all()
@@ -402,11 +413,11 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = await User.get_or_none(telegram_id=user_id)
 
         if not movie or not user:
-            await query.answer("⚠️ Xatolik yuz berdi.", show_alert=True)
+            await _safe_answer(query, "⚠️ Xatolik yuz berdi.", show_alert=True)
             return
 
         if await Rating.exists(user=user, movie=movie):
-            await query.answer("⚠️ Siz allaqachon ovoz bergansiz!", show_alert=True)
+            await _safe_answer(query, "⚠️ Siz allaqachon ovoz bergansiz!", show_alert=True)
             await query.edit_message_reply_markup(reply_markup=None)
             return
 
@@ -416,7 +427,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         movie.rating_count += 1
         await movie.save()
 
-        await query.answer(f"✅ {score} ⭐ baho qo'yildi!", show_alert=True)
+        await _safe_answer(query, f"✅ {score} ⭐ baho qo'yildi!", show_alert=True)
 
         new_rating_text = f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)"
 
@@ -455,4 +466,4 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Noop
     elif data == "noop":
-        await query.answer()
+        await _safe_answer(query)
