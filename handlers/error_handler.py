@@ -1,6 +1,4 @@
 import logging
-import time
-
 from telegram import Update
 from telegram.error import BadRequest, NetworkError
 from telegram.ext import ContextTypes
@@ -11,10 +9,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-_NETWORK_ALERT_COOLDOWN_SEC = 300
-_last_network_alert_ts = 0.0
-
 
 def _is_transient_network_error(error: Exception) -> bool:
     if not isinstance(error, NetworkError):
@@ -41,8 +35,6 @@ def _is_expired_query_error(error: Exception) -> bool:
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Xatoliklarni log qilish va adminga yuborish"""
-    global _last_network_alert_ts
-
     err = context.error
     if err is None:
         return
@@ -55,10 +47,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     # Transport-level errors happen intermittently; avoid spamming admin for each one.
     if _is_transient_network_error(err):
         logger.warning("Transient network error: %s", err)
-        now = time.time()
-        if now - _last_network_alert_ts < _NETWORK_ALERT_COOLDOWN_SEC:
-            return
-        _last_network_alert_ts = now
+        return
 
     logger.error("Exception while handling an update:", exc_info=err)
     # Error Notificator orqali adminga yuborish

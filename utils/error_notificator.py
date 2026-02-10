@@ -1,4 +1,5 @@
 from telegram import Update
+from telegram.error import BadRequest, NetworkError
 from telegram.ext import ContextTypes
 from datetime import datetime
 import traceback
@@ -19,6 +20,10 @@ class ErrorNotificator:
         error: Exception,
         update: Update = None
     ):
+        if self._should_skip_notification(error):
+            logger.warning("Skipped noisy error notification: %s", error)
+            return
+
         user_info = "N/A"
         chat_info = "N/A"
 
@@ -57,6 +62,29 @@ class ErrorNotificator:
                 )
             except Exception as e:
                 logger.error(f"Admin {admin_id} ga yuborib bo'lmadi: {e}")
+
+    @staticmethod
+    def _should_skip_notification(error: Exception) -> bool:
+        if isinstance(error, NetworkError):
+            text = str(error).lower()
+            transient_markers = (
+                "remoteprotocolerror",
+                "server disconnected without sending a response",
+                "readerror",
+                "timed out",
+                "timeout",
+                "connection reset",
+                "temporarily unavailable",
+            )
+            if any(marker in text for marker in transient_markers):
+                return True
+
+        if isinstance(error, BadRequest):
+            text = str(error).lower()
+            if "query is too old" in text or "query id is invalid" in text:
+                return True
+
+        return False
 
 
 error_notificator = ErrorNotificator([ADMIN_ID])
