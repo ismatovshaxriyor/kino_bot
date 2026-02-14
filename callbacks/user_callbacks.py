@@ -3,7 +3,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
 
-from database import Genre, Movie, Rating, User, UserMovieHistory
+from database import Genre, Movie, MoviePart, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from handlers.history_handler import get_history_keyboard
@@ -151,7 +151,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # Kino tanlash - darhol video yuborish
+    # Kino tanlash
     elif data.startswith("umovie_"):
         movie_id = int(data.split("_")[1])
         movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
@@ -169,6 +169,49 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not created:
             await history.save()
 
+        # Qismlarni tekshirish
+        parts_count = await MoviePart.filter(movie=movie).count()
+
+        if parts_count > 0:
+            # Qismli kino — qismlar ro'yxatini ko'rsatish
+            movie_parts = await MoviePart.filter(movie=movie).order_by('part_number')
+
+            genres = await movie.movie_genre.all()
+            genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
+            countries = await movie.movie_country.all()
+            countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
+
+            movie_info = (
+                f"🎬 <b>{movie.movie_name}</b>\n\n"
+                f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
+                f"🎭 <b>Janr:</b> {genres_text}\n"
+                f"🌍 <b>Davlat:</b> {countries_text}\n"
+                f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
+                f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
+                f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n\n"
+                f"📀 <b>Qismlar soni:</b> {parts_count} ta\n\n"
+                f"👇 Qaysi qismni ko'rmoqchisiz?"
+            )
+
+            btns = []
+            row = []
+            for part in movie_parts:
+                label = part.title or f"{part.part_number}-qism"
+                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"upart_{part.part_id}"))
+                if len(row) == 3:
+                    btns.append(row)
+                    row = []
+            if row:
+                btns.append(row)
+
+            await query.edit_message_text(
+                text=movie_info,
+                reply_markup=InlineKeyboardMarkup(btns),
+                parse_mode="HTML"
+            )
+            return
+
+        # Qismsiz kino — to'g'ridan-to'g'ri video
         # Janrlar ro'yxati
         genres = await movie.movie_genre.all()
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
@@ -461,6 +504,40 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(
                 text=new_caption,
                 reply_markup=None,
+                parse_mode="HTML"
+            )
+
+    # Qism tanlash — video yuborish
+    elif data.startswith("upart_"):
+        part_id = int(data.split("_")[1])
+        part = await MoviePart.get_or_none(part_id=part_id).prefetch_related('movie')
+
+        if not part:
+            await query.edit_message_text("⚠️ Qism topilmadi.")
+            return
+
+        movie = part.movie
+        label = part.title or f"{part.part_number}-qism"
+
+        # Xabarni o'chirish
+        await query.delete_message()
+
+        caption = (
+            f"🎬 <b>{movie.movie_name}</b>\n"
+            f"📀 <b>{label}</b>"
+        )
+
+        try:
+            await context.bot.send_video(
+                chat_id=update.effective_chat.id,
+                video=part.file_id,
+                caption=caption,
+                parse_mode="HTML"
+            )
+        except BadRequest:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=caption + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
                 parse_mode="HTML"
             )
 

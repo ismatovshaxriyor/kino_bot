@@ -5,7 +5,7 @@ from datetime import date
 from math import ceil
 
 from services import ai_assistant
-from database import User, Movie, UserMovieHistory, Rating
+from database import User, Movie, MoviePart, UserMovieHistory, Rating
 from utils import error_notificator, ADMIN_ID, MANAGER_ID
 from utils.decorators import channel_subscription_required, user_registered_required
 
@@ -125,6 +125,56 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             movie = await Movie.get_or_none(movie_code=movie_code).prefetch_related('movie_genre', 'movie_country')
 
             if movie:
+                # Qismlarni tekshirish
+                parts_count = await MoviePart.filter(movie=movie).count()
+
+                if parts_count > 0:
+                    # Qismli kino — qismlar ro'yxatini ko'rsatish
+                    parts = await MoviePart.filter(movie=movie).order_by('part_number')
+
+                    # Janrlar ro'yxati
+                    genres = await movie.movie_genre.all()
+                    genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
+
+                    # Davlatlar ro'yxati
+                    countries = await movie.movie_country.all()
+                    countries_text = ", ".join([c.name for c in countries]) if countries else "Noma'lum"
+
+                    movie_info = (
+                        f"🎬 <b>{movie.movie_name}</b>\n\n"
+                        f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
+                        f"🎭 <b>Janr:</b> {genres_text}\n"
+                        f"🌍 <b>Davlat:</b> {countries_text}\n"
+                        f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
+                        f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
+                        f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n\n"
+                        f"📀 <b>Qismlar soni:</b> {parts_count} ta\n\n"
+                        f"👇 Qaysi qismni ko'rmoqchisiz?"
+                    )
+
+                    btns = []
+                    row = []
+                    for part in parts:
+                        label = part.title or f"{part.part_number}-qism"
+                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"upart_{part.part_id}"))
+                        if len(row) == 3:
+                            btns.append(row)
+                            row = []
+                    if row:
+                        btns.append(row)
+
+                    # Tarixga yozish
+                    user_id = update.effective_user.id
+                    user = await User.get(telegram_id=user_id)
+                    history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+                    if not created:
+                        await history.save()
+
+                    reply_markup = InlineKeyboardMarkup(btns)
+                    await update.message.reply_text(movie_info, reply_markup=reply_markup, parse_mode="HTML")
+                    return
+
+                # Qismsiz kino — hozirgi mantiq
                 # Janrlar ro'yxati
                 genres = await movie.movie_genre.all()
                 genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"

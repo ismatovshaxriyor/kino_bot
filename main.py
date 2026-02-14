@@ -49,7 +49,7 @@ def main():
     bot.add_handler(CallbackQueryHandler(manager_callback, pattern=r"^manager_"))
     bot.add_handler(CallbackQueryHandler(channel_callback, pattern=r"^channel_"))
     bot.add_handler(CallbackQueryHandler(statistics_callback, pattern=r"^stats_"))
-    bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|user_back|noop|rate_movie_|set_rating_|cancel_rating_|uhistory_page_|utop_page_|utop_filter_)"))
+    bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|upart_|user_back|noop|rate_movie_|set_rating_|cancel_rating_|uhistory_page_|utop_page_|utop_filter_)"))
     bot.add_handler(CallbackQueryHandler(check_subscription_callback, pattern=r"^check_subscription$"))
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))
 

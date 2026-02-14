@@ -53,3 +53,20 @@ class Movie(models.Model):
         hours = self.movie_duration // 60
         minutes = self.movie_duration % 60
         return f"{hours}s {minutes}min" if hours else f"{minutes}min"
+
+
+class MoviePart(models.Model):
+    part_id = fields.IntField(pk=True)
+    movie = fields.ForeignKeyField('models.Movie', related_name='parts', on_delete=fields.CASCADE)
+    part_number = fields.IntField()
+    title = fields.CharField(max_length=255, null=True)
+    file_id = fields.TextField()
+
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("movie", "part_number"),)
+        ordering = ["part_number"]
+
+    def __str__(self):
+        return f"{self.movie.movie_name} - {self.part_number}-qism"
