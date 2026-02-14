@@ -30,7 +30,7 @@ async def get_genre_keyboard():
 async def get_year_keyboard():
     """Yillar ro'yxati tugmalari"""
     # Kinolar yillarini olish
-    movies = await Movie.all().distinct().values_list('movie_year', flat=True)
+    movies = await Movie.filter(parent_movie__isnull=True).distinct().values_list('movie_year', flat=True)
     years = sorted(set([y for y in movies if y]), reverse=True)
 
     btns = []

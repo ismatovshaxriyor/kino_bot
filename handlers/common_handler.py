@@ -5,7 +5,7 @@ from datetime import date
 from math import ceil
 
 from services import ai_assistant
-from database import User, Movie, MoviePart, UserMovieHistory, Rating
+from database import User, Movie, UserMovieHistory, Rating
 from utils import error_notificator, ADMIN_ID, MANAGER_ID
 from utils.decorators import channel_subscription_required, user_registered_required
 
@@ -48,7 +48,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Kinolarni qidirish
-        movies_query = Movie.filter(movie_name__icontains=search_query)
+        movies_query = Movie.filter(movie_name__icontains=search_query, parent_movie__isnull=True)
         total = await movies_query.count()
 
         if total == 0:
@@ -125,24 +125,30 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             movie = await Movie.get_or_none(movie_code=movie_code).prefetch_related('movie_genre', 'movie_country')
 
             if movie:
-                # Qismlarni tekshirish
-                parts_count = await MoviePart.filter(movie=movie).count()
+                # Qismlarni tekshirish (bolalar kinolar)
+                child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
+                parts_count = len(child_parts)
 
                 if parts_count > 0:
                     # Qismli kino — qismlar ro'yxatini ko'rsatish
-                    parts = await MoviePart.filter(movie=movie).order_by('part_number')
+                    # Ota-kino ham 1-qism hisoblanadi agar file_id bor bo'lsa
+                    all_parts = []
+                    if movie.file_id:
+                        all_parts.append((movie, 1, f"1-qism"))
+                    for part in child_parts:
+                        label = f"{part.part_number}-qism"
+                        all_parts.append((part, part.part_number, label))
 
                     movie_info = (
                         f"🎬 <b>{movie.movie_name}</b>\n\n"
-                        f"📀 <b>Qismlar soni:</b> {parts_count} ta\n\n"
+                        f"📀 <b>Qismlar soni:</b> {len(all_parts)} ta\n\n"
                         f"👇 Qaysi qismni ko'rmoqchisiz?"
                     )
 
                     btns = []
                     row = []
-                    for part in parts:
-                        label = part.title or f"{part.part_number}-qism"
-                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"upart_{part.part_id}"))
+                    for part_movie, num, label in all_parts:
+                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"umovie_{part_movie.movie_id}"))
                         if len(row) == 3:
                             btns.append(row)
                             row = []

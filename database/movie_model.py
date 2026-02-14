@@ -15,8 +15,8 @@ class LanguageEnum(str, Enum):
 
 class Movie(models.Model):
     movie_id = fields.IntField(pk=True)
-    movie_code = fields.IntField(unique=True)
-    file_id = fields.TextField()
+    movie_code = fields.IntField(unique=True, null=True)
+    file_id = fields.TextField(null=True)
     movie_name = fields.CharField(max_length=255)
     movie_genre = fields.ManyToManyField('models.Genre', related_name='movies', null=True)
     movie_country = fields.ManyToManyField('models.Countries', related_name='movies', null=True)
@@ -27,6 +27,12 @@ class Movie(models.Model):
     movie_language = fields.CharEnumField(LanguageEnum, null=True)
     total_rating_sum = fields.BigIntField(default=0)
     rating_count = fields.IntField(default=0)
+
+    # Qismlar uchun self-referencing
+    parent_movie = fields.ForeignKeyField(
+        'models.Movie', related_name='parts', on_delete=fields.CASCADE, null=True
+    )
+    part_number = fields.IntField(null=True)
 
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
@@ -54,19 +60,3 @@ class Movie(models.Model):
         minutes = self.movie_duration % 60
         return f"{hours}s {minutes}min" if hours else f"{minutes}min"
 
-
-class MoviePart(models.Model):
-    part_id = fields.IntField(pk=True)
-    movie = fields.ForeignKeyField('models.Movie', related_name='parts', on_delete=fields.CASCADE)
-    part_number = fields.IntField()
-    title = fields.CharField(max_length=255, null=True)
-    file_id = fields.TextField()
-
-    created_at = fields.DatetimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = (("movie", "part_number"),)
-        ordering = ["part_number"]
-
-    def __str__(self):
-        return f"{self.movie.movie_name} - {self.part_number}-qism"

@@ -31,7 +31,7 @@ def _with_menu(text: str) -> tuple[str, InlineKeyboardMarkup]:
 async def _overview_text() -> str:
     total_users = await User.all().count()
     total_admins = await User.filter(user_type="admin").count()
-    total_movies = await Movie.all().count()
+    total_movies = await Movie.filter(parent_movie__isnull=True).count()
     total_genres = await Genre.all().count()
     total_countries = await Countries.all().count()
     total_channels = await Channels.all().count()
@@ -87,7 +87,7 @@ async def _rating_text() -> str:
     rated_movies_total = await Movie.filter(rating_count__gt=0).count()
 
     avg_rating_global = 0.0
-    rated_movies = await Movie.filter(rating_count__gt=0).all()
+    rated_movies = await Movie.filter(rating_count__gt=0, parent_movie__isnull=True).all()
     if rated_movies:
         avg_rating_global = round(sum(m.average_rating for m in rated_movies) / len(rated_movies), 2)
 
@@ -116,7 +116,7 @@ async def _top_text() -> str:
     )
 
     # Reyting bo'yicha top
-    rated_movies = await Movie.filter(rating_count__gt=0).all()
+    rated_movies = await Movie.filter(rating_count__gt=0, parent_movie__isnull=True).all()
     top_rated = sorted(rated_movies, key=lambda m: (m.average_rating, m.rating_count), reverse=True)[:5]
     rated_text = (
         "\n".join(

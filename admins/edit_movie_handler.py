@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 
-from database import Countries, Genre, LanguageEnum, Movie, MoviePart, QualityEnum
+from database import Countries, Genre, LanguageEnum, Movie, QualityEnum
 from utils.decorators import admin_required
 from utils import error_notificator, get_movies_page
 from admins.movie_handlers import get_movies_keyboard
@@ -94,7 +94,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         [InlineKeyboardButton("📝 Tavsifni o'zgartirish", callback_data="edit_field_desc")],
         [InlineKeyboardButton("📁 Fayl ID ni o'zgartirish", callback_data="edit_field_file")],
 
-        [InlineKeyboardButton(f"🎬 Qismlar: {await MoviePart.filter(movie=movie).count()} ta", callback_data="edit_field_parts")],
+        [InlineKeyboardButton(f"🎬 Qismlar: {await Movie.filter(parent_movie=movie).count()} ta", callback_data="edit_field_parts")],
 
         [InlineKeyboardButton("🗑 O'chirish", callback_data="delete_confirm")],
         [InlineKeyboardButton("🔙 Bekor qilish", callback_data="cancel_edit")]
@@ -295,32 +295,73 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # ========== QISMLAR BOSHQARUVI ==========
     if data == "edit_field_parts":
         movie_id = context.user_data.get('edit_movie_id')
-        parts = await MoviePart.filter(movie_id=movie_id).order_by('part_number')
+        movie = await Movie.get_or_none(movie_id=movie_id)
+        child_parts = await Movie.filter(parent_movie_id=movie_id).order_by('part_number')
 
         btns = []
-        for part in parts:
-            label = part.title or f"{part.part_number}-qism"
+        # Agar ota-kinoning file_id bor bo'lsa, u 1-qism
+        if movie and movie.file_id:
+            btns.append([
+                InlineKeyboardButton(f"📀 1-qism (asosiy)", callback_data="noop_part"),
+            ])
+        for part in child_parts:
+            label = f"{part.part_number}-qism"
             btns.append([
                 InlineKeyboardButton(f"📀 {label}", callback_data="noop_part"),
-                InlineKeyboardButton("🗑", callback_data=f"delete_part_{part.part_id}")
+                InlineKeyboardButton("✏️", callback_data=f"edit_movie_{part.movie_id}"),
+                InlineKeyboardButton("🗑", callback_data=f"delete_part_{part.movie_id}")
             ])
 
+        total = len(child_parts) + (1 if movie and movie.file_id else 0)
         btns.append([InlineKeyboardButton("➕ Qism qo'shish", callback_data="add_part")])
         btns.append([InlineKeyboardButton("🔙 Ortga", callback_data="back_to_menu")])
 
-        text = f"🎬 <b>Qismlar boshqaruvi</b>\n\nJami: {len(parts)} ta qism"
+        text = f"🎬 <b>Qismlar boshqaruvi</b>\n\nJami: {total} ta qism"
         await _edit_message(query, text, InlineKeyboardMarkup(btns))
         return SELECTING_ACTION
 
     if data == "add_part":
-        context.user_data['edit_field'] = 'add_part_number'
-        await _edit_message(query, "🔢 <b>Qism raqamini kiriting:</b>\n\n(Masalan: 1, 2, 3...)\n\nBekor qilish uchun /cancel bosing")
+        movie_id = context.user_data.get('edit_movie_id')
+        movie = await Movie.get_or_none(movie_id=movie_id)
+        child_parts = await Movie.filter(parent_movie_id=movie_id).order_by('part_number')
+
+        if not child_parts and movie and movie.file_id:
+            # Birinchi qism qo'shilmoqda — avto-konvert
+            # Ota-kinoning videosi 1-qism bo'ladi
+            await Movie.create(
+                movie_name=movie.movie_name,
+                file_id=movie.file_id,
+                parent_movie=movie,
+                part_number=1,
+                movie_year=movie.movie_year,
+                movie_duration=movie.movie_duration,
+                movie_description=movie.movie_description,
+                movie_quality=movie.movie_quality,
+                movie_language=movie.movie_language,
+            )
+            # Ota-kinoning file_id ni tozalash (container bo'ladi)
+            movie.file_id = None
+            await movie.save()
+            context.user_data['add_part_number_auto'] = 2
+        else:
+            # Keyingi qism raqamini hisoblash
+            max_part = max([p.part_number for p in child_parts], default=0)
+            context.user_data['add_part_number_auto'] = max_part + 1
+
+        context.user_data['edit_field'] = 'add_part_file'
+        next_num = context.user_data['add_part_number_auto']
+        await _edit_message(
+            query,
+            f"🎬 <b>{next_num}-qism uchun videoni yuboring:</b>\n\n"
+            "(Video forward qiling yoki to'g'ridan-to'g'ri yuboring)\n\n"
+            "Bekor qilish uchun /cancel bosing"
+        )
         return WAITING_INPUT
 
     if data.startswith("delete_part_"):
-        part_id = int(data.split("_")[2])
-        part = await MoviePart.get_or_none(part_id=part_id)
-        if part:
+        part_movie_id = int(data.split("_")[2])
+        part = await Movie.get_or_none(movie_id=part_movie_id)
+        if part and part.parent_movie_id:
             await part.delete()
             await query.answer("🗑 Qism o'chirildi!", show_alert=True)
         else:
@@ -328,20 +369,27 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
         # Qismlar ro'yxatiga qaytish
         movie_id = context.user_data.get('edit_movie_id')
-        parts = await MoviePart.filter(movie_id=movie_id).order_by('part_number')
+        movie = await Movie.get_or_none(movie_id=movie_id)
+        child_parts = await Movie.filter(parent_movie_id=movie_id).order_by('part_number')
 
         btns = []
-        for p in parts:
-            label = p.title or f"{p.part_number}-qism"
+        if movie and movie.file_id:
+            btns.append([
+                InlineKeyboardButton(f"📀 1-qism (asosiy)", callback_data="noop_part"),
+            ])
+        for p in child_parts:
+            label = f"{p.part_number}-qism"
             btns.append([
                 InlineKeyboardButton(f"📀 {label}", callback_data="noop_part"),
-                InlineKeyboardButton("🗑", callback_data=f"delete_part_{p.part_id}")
+                InlineKeyboardButton("✏️", callback_data=f"edit_movie_{p.movie_id}"),
+                InlineKeyboardButton("🗑", callback_data=f"delete_part_{p.movie_id}")
             ])
 
+        total = len(child_parts) + (1 if movie and movie.file_id else 0)
         btns.append([InlineKeyboardButton("➕ Qism qo'shish", callback_data="add_part")])
         btns.append([InlineKeyboardButton("🔙 Ortga", callback_data="back_to_menu")])
 
-        text = f"🎬 <b>Qismlar boshqaruvi</b>\n\nJami: {len(parts)} ta qism"
+        text = f"🎬 <b>Qismlar boshqaruvi</b>\n\nJami: {total} ta qism"
         await _edit_message(query, text, InlineKeyboardMarkup(btns))
         return SELECTING_ACTION
 
@@ -418,38 +466,17 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Qism qo'shish flow
         elif edit_field == 'add_part_number':
-            if not new_value.isdigit():
-                await update.message.reply_text("⚠️ Qism raqami faqat raqam bo'lishi kerak!")
-                return WAITING_INPUT
-
-            part_number = int(new_value)
-            exists = await MoviePart.exists(movie_id=movie_id, part_number=part_number)
-            if exists:
-                await update.message.reply_text(f"⚠️ {part_number}-qism allaqachon mavjud! Boshqa raqam kiriting.")
-                return WAITING_INPUT
-
-            context.user_data['add_part_number'] = part_number
-            context.user_data['edit_field'] = 'add_part_title'
-            await update.message.reply_text(
-                f"✍️ <b>{part_number}-qism uchun sarlavha kiriting:</b>\n\n"
-                "(Masalan: '1-qism' yoki 'Final'. O'tkazib yuborish uchun - yuboring)",
-                parse_mode="HTML"
-            )
+            # Legacy — eski flow, endi ishlatilmaydi
+            await update.message.reply_text("⚠️ Iltimos, video yuboring!")
             return WAITING_INPUT
 
         elif edit_field == 'add_part_title':
-            title = new_value if new_value.strip() != '-' else None
-            context.user_data['add_part_title'] = title
-            context.user_data['edit_field'] = 'add_part_file'
-            await update.message.reply_text(
-                "🎬 <b>Endi qismning videosini yuboring:</b>\n\n"
-                "(Video forward qiling yoki to'g'ridan-to'g'ri yuboring)",
-                parse_mode="HTML"
-            )
+            # Legacy
+            await update.message.reply_text("⚠️ Iltimos, video yuboring!")
             return WAITING_INPUT
 
         elif edit_field == 'add_part_file':
-            # Agar text yuborilsa (file_id o'rniga video kutiladi)
+            # Agar text yuborilsa (video kutiladi)
             await update.message.reply_text("⚠️ Iltimos, video yuboring, text emas!")
             return WAITING_INPUT
 
@@ -488,18 +515,25 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         file_id = update.message.video.file_id
-        part_number = context.user_data.pop('add_part_number', 1)
-        title = context.user_data.pop('add_part_title', None)
+        part_number = context.user_data.pop('add_part_number_auto', 2)
+        movie = await Movie.get_or_none(movie_id=movie_id)
 
-        await MoviePart.create(
-            movie_id=movie_id,
+        if not movie:
+            await update.message.reply_text("❌ Kino topilmadi.")
+            context.user_data['state'] = None
+            return ConversationHandler.END
+
+        # Yangi qism (Movie) yaratish
+        new_part = await Movie.create(
+            movie_name=f"{movie.movie_name}",
+            file_id=file_id,
+            parent_movie=movie,
             part_number=part_number,
-            title=title,
-            file_id=file_id
         )
 
         await update.message.reply_text(
-            f"✅ <b>{title or f'{part_number}-qism'}</b> muvaffaqiyatli qo'shildi!",
+            f"✅ <b>{part_number}-qism</b> muvaffaqiyatli qo'shildi!\n\n"
+            f"📝 Qism ma'lumotlarini tahrirlash uchun qismlar menyusidan ✏️ tugmasini bosing.",
             parse_mode="HTML"
         )
 

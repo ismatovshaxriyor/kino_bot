@@ -3,7 +3,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
 
-from database import Genre, Movie, MoviePart, Rating, User, UserMovieHistory
+from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from handlers.history_handler import get_history_keyboard
@@ -32,11 +32,11 @@ async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 
         genre = await Genre.get_or_none(genre_id=int(filter_value))
         if not genre:
             return [], 0, 0
-        movies_query = Movie.filter(movie_genre=genre)
+        movies_query = Movie.filter(movie_genre=genre, parent_movie__isnull=True)
     elif filter_type == "year":
-        movies_query = Movie.filter(movie_year=int(filter_value))
+        movies_query = Movie.filter(movie_year=int(filter_value), parent_movie__isnull=True)
     elif filter_type == "search":
-        movies_query = Movie.filter(movie_name__icontains=filter_value)
+        movies_query = Movie.filter(movie_name__icontains=filter_value, parent_movie__isnull=True)
     else:
         return [], 0, 0
 
@@ -169,24 +169,29 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not created:
             await history.save()
 
-        # Qismlarni tekshirish
-        parts_count = await MoviePart.filter(movie=movie).count()
+        # Qismlarni tekshirish (bolalar kinolar)
+        child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
+        parts_count = len(child_parts)
 
         if parts_count > 0:
             # Qismli kino — qismlar ro'yxatini ko'rsatish
-            movie_parts = await MoviePart.filter(movie=movie).order_by('part_number')
+            all_parts = []
+            if movie.file_id:
+                all_parts.append((movie, 1, "1-qism"))
+            for part in child_parts:
+                label = f"{part.part_number}-qism"
+                all_parts.append((part, part.part_number, label))
 
             movie_info = (
                 f"🎬 <b>{movie.movie_name}</b>\n\n"
-                f"📀 <b>Qismlar soni:</b> {parts_count} ta\n\n"
+                f"📀 <b>Qismlar soni:</b> {len(all_parts)} ta\n\n"
                 f"👇 Qaysi qismni ko'rmoqchisiz?"
             )
 
             btns = []
             row = []
-            for part in movie_parts:
-                label = part.title or f"{part.part_number}-qism"
-                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"upart_{part.part_id}"))
+            for part_movie, num, label in all_parts:
+                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"umovie_{part_movie.movie_id}"))
                 if len(row) == 3:
                     btns.append(row)
                     row = []
@@ -493,40 +498,6 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(
                 text=new_caption,
                 reply_markup=None,
-                parse_mode="HTML"
-            )
-
-    # Qism tanlash — video yuborish
-    elif data.startswith("upart_"):
-        part_id = int(data.split("_")[1])
-        part = await MoviePart.get_or_none(part_id=part_id).prefetch_related('movie')
-
-        if not part:
-            await query.edit_message_text("⚠️ Qism topilmadi.")
-            return
-
-        movie = part.movie
-        label = part.title or f"{part.part_number}-qism"
-
-        # Xabarni o'chirish
-        await query.delete_message()
-
-        caption = (
-            f"🎬 <b>{movie.movie_name}</b>\n"
-            f"📀 <b>{label}</b>"
-        )
-
-        try:
-            await context.bot.send_video(
-                chat_id=update.effective_chat.id,
-                video=part.file_id,
-                caption=caption,
-                parse_mode="HTML"
-            )
-        except BadRequest:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=caption + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
                 parse_mode="HTML"
             )
 
