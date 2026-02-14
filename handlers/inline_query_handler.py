@@ -65,13 +65,13 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         exact = await Movie.get_or_none(movie_code=int(q))
         if exact:
             movies = [exact]
-        name_matches = await Movie.filter(movie_name__icontains=q, parent_movie__isnull=True).limit(MAX_INLINE_RESULTS)
+        name_matches = await Movie.filter(movie_name__icontains=q, parent_movie=None).limit(MAX_INLINE_RESULTS)
         if exact:
             movies.extend([m for m in name_matches if m.movie_id != exact.movie_id])
         else:
             movies = list(name_matches)
     else:
-        movies = await Movie.filter(movie_name__icontains=q, parent_movie__isnull=True).limit(MAX_INLINE_RESULTS)
+        movies = await Movie.filter(movie_name__icontains=q, parent_movie=None).limit(MAX_INLINE_RESULTS)
 
     results = []
     for movie in movies[:MAX_INLINE_RESULTS]:

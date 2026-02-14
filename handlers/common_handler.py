@@ -48,7 +48,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Kinolarni qidirish
-        movies_query = Movie.filter(movie_name__icontains=search_query, parent_movie__isnull=True)
+        movies_query = Movie.filter(movie_name__icontains=search_query, parent_movie=None)
         total = await movies_query.count()
 
         if total == 0:

@@ -33,7 +33,7 @@ def get_top_filter_keyboard() -> InlineKeyboardMarkup:
 
 async def _get_movies_for_filter(filter_type: str) -> list[Movie]:
     if filter_type == "views":
-        movies = await Movie.filter(parent_movie__isnull=True).annotate(views_count=Count("viewed_by")).all()
+        movies = await Movie.filter(parent_movie=None).annotate(views_count=Count("viewed_by")).all()
         movies.sort(
             key=lambda m: (getattr(m, "views_count", 0), m.average_rating, m.rating_count),
             reverse=True,
@@ -41,9 +41,9 @@ async def _get_movies_for_filter(filter_type: str) -> list[Movie]:
         return movies
 
     if filter_type == "recent":
-        return await Movie.filter(parent_movie__isnull=True).order_by("-created_at")
+        return await Movie.filter(parent_movie=None).order_by("-created_at")
 
-    movies = await Movie.filter(rating_count__gt=0, parent_movie__isnull=True).all()
+    movies = await Movie.filter(rating_count__gt=0, parent_movie=None).all()
     movies.sort(key=lambda m: (m.average_rating, m.rating_count), reverse=True)
     return movies
 

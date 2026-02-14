@@ -4,9 +4,9 @@ from utils import PAGE_SIZE
 async def get_movies_page(page: int = 1):
     offset = (page - 1) * PAGE_SIZE
 
-    total = await Movie.filter(parent_movie__isnull=True).count()
+    total = await Movie.filter(parent_movie=None).count()
 
-    movies = await Movie.filter(parent_movie__isnull=True) \
+    movies = await Movie.filter(parent_movie=None) \
         .order_by('-created_at') \
         .offset(offset) \
         .limit(PAGE_SIZE)

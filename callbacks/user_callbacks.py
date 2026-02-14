@@ -32,11 +32,11 @@ async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 
         genre = await Genre.get_or_none(genre_id=int(filter_value))
         if not genre:
             return [], 0, 0
-        movies_query = Movie.filter(movie_genre=genre, parent_movie__isnull=True)
+        movies_query = Movie.filter(movie_genre=genre, parent_movie=None)
     elif filter_type == "year":
-        movies_query = Movie.filter(movie_year=int(filter_value), parent_movie__isnull=True)
+        movies_query = Movie.filter(movie_year=int(filter_value), parent_movie=None)
     elif filter_type == "search":
-        movies_query = Movie.filter(movie_name__icontains=filter_value, parent_movie__isnull=True)
+        movies_query = Movie.filter(movie_name__icontains=filter_value, parent_movie=None)
     else:
         return [], 0, 0
 
