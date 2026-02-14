@@ -442,41 +442,16 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['add_part_title'] = title
             context.user_data['edit_field'] = 'add_part_file'
             await update.message.reply_text(
-                "📁 <b>Endi qismning video file_id sini yuboring:</b>\n\n"
-                "(Video forward qilsangiz ham bo'ladi)",
+                "🎬 <b>Endi qismning videosini yuboring:</b>\n\n"
+                "(Video forward qiling yoki to'g'ridan-to'g'ri yuboring)",
                 parse_mode="HTML"
             )
             return WAITING_INPUT
 
         elif edit_field == 'add_part_file':
-            file_id = new_value.strip()
-            part_number = context.user_data.pop('add_part_number', 1)
-            title = context.user_data.pop('add_part_title', None)
-
-            await MoviePart.create(
-                movie_id=movie_id,
-                part_number=part_number,
-                title=title,
-                file_id=file_id
-            )
-
-            await update.message.reply_text(
-                f"✅ <b>{title or f'{part_number}-qism'}</b> muvaffaqiyatli qo'shildi!",
-                parse_mode="HTML"
-            )
-
-            # Kinolar ro'yxatiga qaytish
-            page = context.user_data.get('MOVIE_PAGE', 1)
-            data = await get_movies_page(page)
-            reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
-            await update.message.reply_text(
-                f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>",
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
-
-            context.user_data['state'] = None
-            return ConversationHandler.END
+            # Agar text yuborilsa (file_id o'rniga video kutiladi)
+            await update.message.reply_text("⚠️ Iltimos, video yuboring, text emas!")
+            return WAITING_INPUT
 
         await movie.save()
         await update.message.reply_text("✅ Muvaffaqiyatli saqlandi!")
@@ -502,6 +477,50 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['state'] = None
         return ConversationHandler.END
 
+async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Video qabul qilish (qism qo'shish uchun)"""
+    edit_field = context.user_data.get('edit_field')
+    movie_id = context.user_data.get('edit_movie_id')
+
+    if edit_field != 'add_part_file':
+        # Bu holatda video kutilmaydi
+        return WAITING_INPUT
+
+    try:
+        file_id = update.message.video.file_id
+        part_number = context.user_data.pop('add_part_number', 1)
+        title = context.user_data.pop('add_part_title', None)
+
+        await MoviePart.create(
+            movie_id=movie_id,
+            part_number=part_number,
+            title=title,
+            file_id=file_id
+        )
+
+        await update.message.reply_text(
+            f"✅ <b>{title or f'{part_number}-qism'}</b> muvaffaqiyatli qo'shildi!",
+            parse_mode="HTML"
+        )
+
+        # Kinolar ro'yxatiga qaytish
+        page = context.user_data.get('MOVIE_PAGE', 1)
+        data = await get_movies_page(page)
+        reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
+        await update.message.reply_text(
+            f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+        context.user_data['state'] = None
+        return ConversationHandler.END
+
+    except Exception as e:
+        await error_notificator.notify(context, e, update)
+        context.user_data['state'] = None
+        return ConversationHandler.END
+
 async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Tahrirlash bekor qilindi.")
 
@@ -511,10 +530,11 @@ async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 edit_movie_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$")],
     states={
-        # Restrict edit flow callbacks, otherwise this conversation can swallow unrelated inline buttons.
         SELECTING_ACTION: [CallbackQueryHandler(select_field_callback, pattern=EDIT_MENU_PATTERN)],
-        WAITING_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value)]
+        WAITING_INPUT: [
+            MessageHandler(filters.VIDEO, receive_part_video),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value),
+        ]
     },
     fallbacks=[CommandHandler('cancel', cancel_edit)],
-
 )

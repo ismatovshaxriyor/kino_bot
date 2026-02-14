@@ -132,22 +132,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Qismli kino — qismlar ro'yxatini ko'rsatish
                     parts = await MoviePart.filter(movie=movie).order_by('part_number')
 
-                    # Janrlar ro'yxati
-                    genres = await movie.movie_genre.all()
-                    genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
-
-                    # Davlatlar ro'yxati
-                    countries = await movie.movie_country.all()
-                    countries_text = ", ".join([c.name for c in countries]) if countries else "Noma'lum"
-
                     movie_info = (
                         f"🎬 <b>{movie.movie_name}</b>\n\n"
-                        f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-                        f"🎭 <b>Janr:</b> {genres_text}\n"
-                        f"🌍 <b>Davlat:</b> {countries_text}\n"
-                        f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-                        f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-                        f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n\n"
                         f"📀 <b>Qismlar soni:</b> {parts_count} ta\n\n"
                         f"👇 Qaysi qismni ko'rmoqchisiz?"
                     )
