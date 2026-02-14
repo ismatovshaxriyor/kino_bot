@@ -6,7 +6,9 @@ from utils.decorators import admin_required
 from utils import error_notificator, get_movies_page
 from admins.movie_handlers import get_movies_keyboard
 
-SELECTING_ACTION, WAITING_INPUT = range(2)
+SELECTING_ACTION, WAITING_INPUT, SELECTING_PART_ACTION, \
+WAITING_PART_YEAR, WAITING_PART_DESC, WAITING_PART_DURATION, \
+SELECTING_PART_QUALITY, SELECTING_PART_LANG = range(8)
 EDIT_MENU_PATTERN = (
     r"^(cancel_edit$|delete_confirm$|delete_yes$|delete_no$|"
     r"edit_field_(name|year|code|duration|genres|countries|quality|lang|desc|file|parts)$|"
@@ -569,46 +571,178 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data['state'] = None
             return ConversationHandler.END
 
-        # Yangi qism (Movie) yaratish
-        new_part = await Movie.create(
-            movie_name=f"{movie.movie_name}",
-            file_id=file_id,
-            parent_movie=movie,
-            part_number=part_number,
-            # Metadata nusxalash
-            movie_year=movie.movie_year,
-            movie_duration=movie.movie_duration,
-            movie_description=movie.movie_description,
-            movie_quality=movie.movie_quality,
-            movie_language=movie.movie_language,
-        )
-        # M2M fieldlarni nusxalash
-        await new_part.movie_genre.add(*await movie.movie_genre.all())
-        await new_part.movie_country.add(*await movie.movie_country.all())
+        # Fayl ID ni saqlash
+        context.user_data['new_part_file_id'] = file_id
+        context.user_data['new_part_number'] = part_number
+
+        # Tanlov: Nusxalash yoki Yangi kiritish
+        btns = [
+            [InlineKeyboardButton("📋 Nusxalash (Tezkor)", callback_data="copy_part_data")],
+            [InlineKeyboardButton("✍️ Yangi kiritish", callback_data="new_part_data")],
+            [InlineKeyboardButton("🔙 Bekor qilish", callback_data="cancel_part_add")]
+        ]
 
         await update.message.reply_text(
-            f"✅ <b>{part_number}-qism</b> muvaffaqiyatli qo'shildi!\n\n"
-            f"📝 Qism ma'lumotlarini tahrirlash uchun qismlar menyusidan ✏️ tugmasini bosing.",
+            f"🎬 <b>{part_number}-qism</b> videosi qabul qilindi.\n\n"
+            f"Ma'lumotlarni (Yil, Tavsif, Sifat...) qanday kiritamiz?",
+            reply_markup=InlineKeyboardMarkup(btns),
             parse_mode="HTML"
         )
-
-        # Kinolar ro'yxatiga qaytish
-        page = context.user_data.get('MOVIE_PAGE', 1)
-        data = await get_movies_page(page)
-        reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
-        await update.message.reply_text(
-            f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>",
-            reply_markup=reply_markup,
-            parse_mode="HTML"
-        )
-
-        context.user_data['state'] = None
-        return ConversationHandler.END
+        return SELECTING_PART_ACTION
 
     except Exception as e:
         await error_notificator.notify(context, e, update)
         context.user_data['state'] = None
         return ConversationHandler.END
+
+async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Tahrirlash bekor qilindi.")
+
+    context.user_data['state'] = None
+    return ConversationHandler.END
+
+
+async def create_part_movie_helper(update: Update, context: ContextTypes.DEFAULT_TYPE, copy_from_parent: bool):
+    """Qismni yaratish logikasi (Nusxalash yoki Yangi)"""
+    movie_id = context.user_data.get('edit_movie_id')
+    file_id = context.user_data.get('new_part_file_id')
+    part_number = context.user_data.get('new_part_number')
+    movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related("movie_genre", "movie_country")
+
+    if not movie:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Kino topilmadi.")
+        context.user_data['state'] = None
+        return ConversationHandler.END
+
+    # Metadata tayyorlash
+    if copy_from_parent:
+        year = movie.movie_year
+        duration = movie.movie_duration
+        desc = movie.movie_description
+        quality = movie.movie_quality
+        lang = movie.movie_language
+    else:
+        year = context.user_data.get('new_part_year')
+        duration = context.user_data.get('new_part_duration')
+        desc = context.user_data.get('new_part_desc')
+        quality = context.user_data.get('new_part_quality')
+        lang = context.user_data.get('new_part_lang')
+
+    # Yangi qism (Movie) yaratish
+    new_part = await Movie.create(
+        movie_name=f"{movie.movie_name}",
+        file_id=file_id,
+        parent_movie=movie,
+        part_number=part_number,
+        movie_year=year,
+        movie_duration=duration,
+        movie_description=desc,
+        movie_quality=quality,
+        movie_language=lang,
+    )
+    # M2M fieldlarni nusxalash (Har doim nusxalanadi)
+    await new_part.movie_genre.add(*await movie.movie_genre.all())
+    await new_part.movie_country.add(*await movie.movie_country.all())
+
+    msg_text = (
+        f"✅ <b>{part_number}-qism</b> muvaffaqiyatli qo'shildi!\n\n"
+        f"📝 Qism ma'lumotlarini tahrirlash uchun qismlar menyusidan ✏️ tugmasini bosing."
+    )
+    if update.callback_query:
+        await update.callback_query.message.reply_text(msg_text, parse_mode="HTML")
+    else:
+         await update.message.reply_text(msg_text, parse_mode="HTML")
+
+
+    # Kinolar ro'yxatiga qaytish
+    page = context.user_data.get('MOVIE_PAGE', 1)
+    data = await get_movies_page(page)
+    reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
+
+    text = f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>"
+    if update.callback_query:
+        await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+
+    context.user_data['state'] = None
+    return ConversationHandler.END
+
+
+async def select_part_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "cancel_part_add":
+        await query.edit_message_text("❌ Qism qo'shish bekor qilindi.")
+        context.user_data['state'] = None
+        return ConversationHandler.END
+
+    if data == "copy_part_data":
+        await query.edit_message_text("📋 Ma'lumotlar nusxalanmoqda...")
+        return await create_part_movie_helper(update, context, copy_from_parent=True)
+
+    if data == "new_part_data":
+        await query.edit_message_text("✍️ <b>Yilni kiriting:</b>\n\n(Masalan: 2024)")
+        return WAITING_PART_YEAR
+
+    return SELECTING_PART_ACTION
+
+async def receive_part_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ Yil raqam bo'lishi kerak! Qaytadan kiriting:")
+        return WAITING_PART_YEAR
+
+    context.user_data['new_part_year'] = int(text)
+    await update.message.reply_text("✍️ <b>Tavsifni kiriting:</b>")
+    return WAITING_PART_DESC
+
+async def receive_part_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['new_part_desc'] = update.message.text
+    await update.message.reply_text("✍️ <b>Davomiylikni kiriting (daqiqada):</b>\n\n(Masalan: 120)")
+    return WAITING_PART_DURATION
+
+async def receive_part_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ Davomiylik raqam bo'lishi kerak! Qaytadan kiriting:")
+        return WAITING_PART_DURATION
+
+    context.user_data['new_part_duration'] = int(text)
+
+    btns = [[InlineKeyboardButton(q.value, callback_data=f"set_part_quality_{q.value}")] for q in QualityEnum]
+    await update.message.reply_text("📺 <b>Sifatni tanlang:</b>", reply_markup=InlineKeyboardMarkup(btns), parse_mode="HTML")
+    return SELECTING_PART_QUALITY
+
+async def select_part_quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("set_part_quality_"):
+        val = data.split("_", 3)[3]
+        context.user_data['new_part_quality'] = val
+
+        btns = [[InlineKeyboardButton(l.value, callback_data=f"set_part_lang_{l.value}")] for l in LanguageEnum]
+        await query.edit_message_text("🗣 <b>Tilni tanlang:</b>", reply_markup=InlineKeyboardMarkup(btns), parse_mode="HTML")
+        return SELECTING_PART_LANG
+    return SELECTING_PART_QUALITY
+
+async def select_part_lang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("set_part_lang_"):
+        val = data.split("_", 3)[3]
+        context.user_data['new_part_lang'] = val
+
+        await query.edit_message_text("✅ Ma'lumotlar saqlandi. Qism yaratilmoqda...")
+        return await create_part_movie_helper(update, context, copy_from_parent=False)
+    return SELECTING_PART_LANG
+
 
 async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Tahrirlash bekor qilindi.")
@@ -623,7 +757,13 @@ edit_movie_handler = ConversationHandler(
         WAITING_INPUT: [
             MessageHandler(filters.VIDEO, receive_part_video),
             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value),
-        ]
+        ],
+        SELECTING_PART_ACTION: [CallbackQueryHandler(select_part_action_callback)],
+        WAITING_PART_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_part_year)],
+        WAITING_PART_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_part_desc)],
+        WAITING_PART_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_part_duration)],
+        SELECTING_PART_QUALITY: [CallbackQueryHandler(select_part_quality_callback)],
+        SELECTING_PART_LANG: [CallbackQueryHandler(select_part_lang_callback)],
     },
     fallbacks=[CommandHandler('cancel', cancel_edit)],
 )
