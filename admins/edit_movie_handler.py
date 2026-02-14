@@ -64,11 +64,18 @@ def _build_country_keyboard(countries: list[Countries], selected_ids: list[int])
 async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie_id: int = None):
     """Kinoni tahrirlashni boshlash"""
     query = update.callback_query
-    await query.answer()
 
-    if movie_id is None:
-        movie_id = int(query.data.split("_")[2])
-    context.user_data['edit_movie_id'] = movie_id
+    if query:
+        await query.answer()
+        if movie_id is None:
+            movie_id = int(query.data.split("_")[2])
+        context.user_data['edit_movie_id'] = movie_id
+        context.user_data['editor_msg_id'] = query.message.message_id
+    else:
+        # Message handlerdan chaqirilgan
+        if movie_id is None:
+            movie_id = context.user_data.get('edit_movie_id')
+
     context.user_data['state'] = 'EDIT_MOVIE'
 
     movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related("movie_genre", "movie_country")
@@ -102,11 +109,38 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
 
     text = f"📝 <b>Kino tahrirlash:</b>\n\n🎬 {movie.movie_name}\n\nO'zgartirmoqchi bo'lgan ma'lumotni tanlang:"
 
-    # Xabarni tahrirlash (Video caption yoki text)
-    if query.message.caption:
-        await query.edit_message_caption(caption=text, reply_markup=keyboard, parse_mode="HTML")
+    # Xabarni tahrirlash
+    if query:
+        if query.message.caption:
+            await query.edit_message_caption(caption=text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="HTML")
     else:
-        await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="HTML")
+        # Message handlerdan kelgan - oldingi xabarni tahrirlash
+        msg_id = context.user_data.get('editor_msg_id')
+        chat_id = update.effective_chat.id
+        success = False
+
+        if msg_id:
+            try:
+                # Avval caption o'zgartirib ko'rish (video bo'lsa)
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id, message_id=msg_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
+                )
+                success = True
+            except Exception:
+                try:
+                    # Agar caption bo'lmasa, text o'zgartirish
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id, message_id=msg_id, text=text, reply_markup=keyboard, parse_mode="HTML"
+                    )
+                    success = True
+                except Exception:
+                    pass
+
+        if not success:
+            sent_msg = await context.bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+            context.user_data['editor_msg_id'] = sent_msg.message_id
 
     return SELECTING_ACTION
 
@@ -442,13 +476,38 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Yangi qiymatni qabul qilish va saqlash"""
-    new_value = update.message.text
+    msg = update.message
+    new_value = msg.text
     movie_id = context.user_data.get('edit_movie_id')
     edit_field = context.user_data.get('edit_field')
+    chat_id = update.effective_chat.id
+    editor_msg_id = context.user_data.get('editor_msg_id')
+
+    # Foydalanuvchi xabarini o'chirish
+    try:
+        await msg.delete()
+    except:
+        pass
+
+    async def show_error(error_text):
+        if editor_msg_id:
+            try:
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id, message_id=editor_msg_id,
+                    caption=f"⚠️ {error_text}\n\nQaytadan urinib ko'ring:", parse_mode="HTML"
+                )
+            except:
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id, message_id=editor_msg_id,
+                        text=f"⚠️ {error_text}\n\nQaytadan urinib ko'ring:", parse_mode="HTML"
+                    )
+                except:
+                    pass
 
     movie = await Movie.get_or_none(movie_id=movie_id)
     if not movie:
-        await update.message.reply_text("❌ Kino topilmadi.")
+        await show_error("Kino topilmadi.")
         return ConversationHandler.END
 
     try:
@@ -456,68 +515,40 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             movie.movie_name = new_value
         elif edit_field == 'edit_field_year':
             if not new_value.isdigit():
-                await update.message.reply_text("⚠️ Yil raqam bo'lishi kerak!")
+                await show_error("Yil raqam bo'lishi kerak!")
                 return WAITING_INPUT
             movie.movie_year = int(new_value)
         elif edit_field == 'edit_field_code':
             if not new_value.isdigit():
-                await update.message.reply_text("⚠️ Kod raqam bo'lishi kerak!")
+                await show_error("Kod raqam bo'lishi kerak!")
                 return WAITING_INPUT
             # Check duplicate
             existing = await Movie.get_or_none(movie_code=int(new_value))
             if existing and existing.movie_id != movie_id:
-                await update.message.reply_text("⚠️ Bu kod band!")
+                await show_error("Bu kod band!")
                 return WAITING_INPUT
             movie.movie_code = int(new_value)
         elif edit_field == 'edit_field_duration':
             if not new_value.isdigit():
-                await update.message.reply_text("⚠️ Davomiylik faqat raqam bo'lishi kerak (daqiqada)!")
+                await show_error("Davomiylik faqat raqam bo'lishi kerak (daqiqada)!")
                 return WAITING_INPUT
             movie.movie_duration = int(new_value)
         elif edit_field == 'edit_field_desc':
             movie.movie_description = new_value
         elif edit_field == 'edit_field_file':
             movie.file_id = new_value
-
-        # Qism qo'shish flow
-        elif edit_field == 'add_part_number':
-            # Legacy — eski flow, endi ishlatilmaydi
-            await update.message.reply_text("⚠️ Iltimos, video yuboring!")
-            return WAITING_INPUT
-
-        elif edit_field == 'add_part_title':
-            # Legacy
-            await update.message.reply_text("⚠️ Iltimos, video yuboring!")
-            return WAITING_INPUT
-
         elif edit_field == 'add_part_file':
-            # Agar text yuborilsa (video kutiladi)
-            await update.message.reply_text("⚠️ Iltimos, video yuboring, text emas!")
+            await show_error("Iltimos, video yuboring! Matn qabul qilinmaydi.")
             return WAITING_INPUT
 
         await movie.save()
-        await update.message.reply_text("✅ Muvaffaqiyatli saqlandi!")
 
-        # User so'rovi: Kinolar ro'yxatiga qaytish
-        page = context.user_data.get('MOVIE_PAGE', 1)
-        data = await get_movies_page(page)
-
-        reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
-
-        await update.message.reply_text(
-            f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>",
-            reply_markup=reply_markup,
-            parse_mode="HTML"
-        )
-
-        context.user_data['state'] = None
-        return ConversationHandler.END
+        # Muvaffaqiyatli saqlandi -> Menyuga qaytish (xabarni yangilash)
+        return await start_edit_movie(update, context, movie_id)
 
     except Exception as e:
-        await error_notificator.notify(context, e, update)
-
-        context.user_data['state'] = None
-        return ConversationHandler.END
+        await show_error(f"Xatolik: {e}")
+        return WAITING_INPUT
 
 async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Video qabul qilish (qism qo'shish uchun)"""
