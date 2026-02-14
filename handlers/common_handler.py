@@ -148,7 +148,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     btns = []
                     row = []
                     for part_movie, num, label in all_parts:
-                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"umovie_{part_movie.movie_id}"))
+                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"uwatch_{part_movie.movie_id}"))
                         if len(row) == 3:
                             btns.append(row)
                             row = []

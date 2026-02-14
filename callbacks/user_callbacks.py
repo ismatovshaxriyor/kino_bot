@@ -191,7 +191,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns = []
             row = []
             for part_movie, num, label in all_parts:
-                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"umovie_{part_movie.movie_id}"))
+                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"uwatch_{part_movie.movie_id}"))
                 if len(row) == 3:
                     btns.append(row)
                     row = []
@@ -251,6 +251,94 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Video yuborish (ma'lumot bilan)
 
+
+    # Kino ko'rish (Video yuborish) - Qismlarni tekshirmasdan to'g'ridan-to'g'ri
+    elif data.startswith("uwatch_"):
+        movie_id = int(data.split("_")[1])
+        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
+        user_id = update.effective_user.id
+
+        if not movie:
+            await query.answer("⚠️ Kino topilmadi.", show_alert=True)
+            return
+
+        # Tarixga yozish
+        user = await User.get(telegram_id=user_id)
+        history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+        if not created:
+            await history.save()
+
+        # Janrlar ro'yxati
+        genres = await movie.movie_genre.all()
+        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
+
+        # Davlatlar ro'yxati
+        countries = await movie.movie_country.all()
+        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
+
+        # Kino ma'lumotlari
+        movie_info = (
+            f"🎬 <b>{movie.movie_name}</b>\n\n"
+            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
+            f"🎭 <b>Janr:</b> {genres_text}\n"
+            f"🌍 <b>Davlat:</b> {countries_text}\n"
+            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
+            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
+            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
+            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
+        )
+
+        if movie.movie_description:
+            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
+            movie_info += f"\n📝 <b>Tavsif:</b> {desc}\n"
+
+        if movie.movie_code:
+            movie_info += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
+
+        # Xabarni o'chirish (agar menyudan bosilgan bo'lsa)
+        try:
+            await query.delete_message()
+        except:
+            pass
+
+        # Tugmalar (Baholash va Admin)
+        btns = []
+
+        # Baholash
+        has_rated = await Rating.exists(user=user, movie=movie)
+        if not has_rated:
+            btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
+
+        # Admin tahrirlash
+        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
+            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+        reply_markup = InlineKeyboardMarkup(btns) if btns else None
+
+        # Video yuborish
+        if movie.file_id:
+            try:
+                await context.bot.send_video(
+                    chat_id=update.effective_chat.id,
+                    video=movie.file_id,
+                    caption=movie_info,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+            except BadRequest:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+        else:
+             await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
 
     # Ortga
     elif data == "user_back":
