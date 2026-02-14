@@ -250,6 +250,30 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         # Video yuborish (ma'lumot bilan)
+        if movie.file_id:
+            try:
+                await context.bot.send_video(
+                    chat_id=update.effective_chat.id,
+                    video=movie.file_id,
+                    caption=movie_info,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+            except BadRequest as e:
+                await error_notificator.notify(context, e, update)
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+        else:
+             await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
 
 
     # Kino ko'rish (Video yuborish) - Qismlarni tekshirmasdan to'g'ridan-to'g'ri
@@ -313,6 +337,15 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
+        # Qismlar menyusiga qaytish (agar qismli kino bo'lsa)
+        if movie.parent_movie_id:
+            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
+        else:
+            # Agar o'zi parent bo'lsa va bolalari bo'lsa
+            child_count = await Movie.filter(parent_movie=movie).count()
+            if child_count > 0:
+                 btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         # Video yuborish
@@ -322,10 +355,10 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     video=movie.file_id,
                     caption=movie_info,
-                    parse_mode="HTML",
                     reply_markup=reply_markup
                 )
-            except BadRequest:
+            except BadRequest as e:
+                await error_notificator.notify(context, e, update)
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
                     text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",

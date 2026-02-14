@@ -222,7 +222,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="HTML",
                             reply_markup=reply_markup
                         )
-                    except BadRequest:
+                    except BadRequest as e:
+                        await error_notificator.notify(context, e, update)
                         await update.message.reply_text(
                             movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
                             parse_mode="HTML",

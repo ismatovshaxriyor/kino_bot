@@ -25,22 +25,25 @@ def main():
     bot.add_handler(edit_movie_handler)
 
     # Admin handlers
-    bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar"), get_genres))
-    bot.add_handler(MessageHandler(filters.Regex(r"🌏 Davlatlar"), get_countries))
-    bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar"), get_managers))
-    bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar"), get_movies))
-    bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar"), get_channels))
-    bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika"), statistics_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga"), admin_back_handler))
+    # Admin handlers - Only Private
+    private_filter = filters.ChatType.PRIVATE
 
-    # User handlers
-    bot.add_handler(MessageHandler(filters.Regex(r"🔍 Nomi bo'yicha"), search_by_name_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"🎭 Janr bo'yicha"), search_by_genre_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"📅 Yil bo'yicha"), search_by_year_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"🏆 Top kinolar"), top_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi"), ai_assistant_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar") & private_filter, get_genres))
+    bot.add_handler(MessageHandler(filters.Regex(r"🌏 Davlatlar") & private_filter, get_countries))
+    bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar") & private_filter, get_managers))
+    bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar") & private_filter, get_movies))
+    bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar") & private_filter, get_channels))
+    bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika") & private_filter, statistics_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga") & private_filter, admin_back_handler))
 
-    bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    # User handlers - Only Private
+    bot.add_handler(MessageHandler(filters.Regex(r"🔍 Nomi bo'yicha") & private_filter, search_by_name_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🎭 Janr bo'yicha") & private_filter, search_by_genre_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"📅 Yil bo'yicha") & private_filter, search_by_year_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🏆 Top kinolar") & private_filter, top_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi") & private_filter, ai_assistant_handler))
+
+    bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, message_handler))
 
     # Callbacks
     bot.add_handler(CallbackQueryHandler(movie_callback, pattern=r"^movie_"))
