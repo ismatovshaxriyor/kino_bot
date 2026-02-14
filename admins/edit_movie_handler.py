@@ -339,7 +339,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         if not child_parts and movie and movie.file_id:
             # Birinchi qism qo'shilmoqda — avto-konvert
             # Ota-kinoning videosi 1-qism bo'ladi
-            await Movie.create(
+            new_part1 = await Movie.create(
                 movie_name=movie.movie_name,
                 file_id=movie.file_id,
                 parent_movie=movie,
@@ -350,6 +350,10 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 movie_quality=movie.movie_quality,
                 movie_language=movie.movie_language,
             )
+            # M2M fieldlarni nusxalash
+            await new_part1.movie_genre.add(*await movie.movie_genre.all())
+            await new_part1.movie_country.add(*await movie.movie_country.all())
+
             # Ota-kinoning file_id ni tozalash (container bo'ladi)
             movie.file_id = None
             await movie.save()
@@ -540,7 +544,16 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             file_id=file_id,
             parent_movie=movie,
             part_number=part_number,
+            # Metadata nusxalash
+            movie_year=movie.movie_year,
+            movie_duration=movie.movie_duration,
+            movie_description=movie.movie_description,
+            movie_quality=movie.movie_quality,
+            movie_language=movie.movie_language,
         )
+        # M2M fieldlarni nusxalash
+        await new_part.movie_genre.add(*await movie.movie_genre.all())
+        await new_part.movie_country.add(*await movie.movie_country.all())
 
         await update.message.reply_text(
             f"✅ <b>{part_number}-qism</b> muvaffaqiyatli qo'shildi!\n\n"
