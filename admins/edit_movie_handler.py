@@ -128,11 +128,22 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     # O'chirishni so'rash
     if data == "delete_confirm":
+        movie_id = context.user_data.get('edit_movie_id')
+        parts_count = await Movie.filter(parent_movie_id=movie_id).count()
+
+        warning = ""
+        if parts_count > 0:
+            warning = f"\n\n⚠️ <b>DIQQAT! Bu kinoning {parts_count} ta qismi bor.</b>\nOta-kinoni o'chirsangiz, barcha qismlar ham o'chib ketadi!"
+
         btns = [
             [InlineKeyboardButton("🗑 HA, O'CHIRISH", callback_data="delete_yes")],
             [InlineKeyboardButton("🔙 YO'Q, QAYTISH", callback_data="delete_no")]
         ]
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btns))
+        await _edit_message(
+            query,
+            f"🗑 <b>Kino o'chirilmoqda...</b>\n\nRostdan ham o'chirmoqchimisiz?{warning}",
+            InlineKeyboardMarkup(btns)
+        )
         return SELECTING_ACTION
 
     # O'chirishni tasdiqlash

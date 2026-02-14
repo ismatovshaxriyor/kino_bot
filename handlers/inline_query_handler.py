@@ -150,6 +150,35 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
     if str(user.user_type) == "admin" or update.effective_user.id in (ADMIN_ID, MANAGER_ID):
         btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
+    # Qismlarni tekshirish (bolalar kinolar)
+    child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
+    if child_parts:
+        # Qismli kino — qismlar ro'yxatini ko'rsatish
+        all_parts = []
+        if movie.file_id:
+            all_parts.append((movie, 1, "1-qism"))
+        for part in child_parts:
+            label = f"{part.part_number}-qism"
+            all_parts.append((part, part.part_number, label))
+
+        movie_info += f"\n\n📀 <b>Qismlar soni:</b> {len(all_parts)} ta\n👇 Qaysi qismni ko'rmoqchisiz?"
+
+        parts_row = []
+        for part_movie, num, label in all_parts:
+            parts_row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"umovie_{part_movie.movie_id}"))
+            if len(parts_row) == 3:
+                btns.append(parts_row)
+                parts_row = []
+        if parts_row:
+            btns.append(parts_row)
+
+        await update.message.reply_text(
+            movie_info,
+            reply_markup=InlineKeyboardMarkup(btns),
+            parse_mode="HTML"
+        )
+        return
+
     reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
     if movie.file_id:

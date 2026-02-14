@@ -229,7 +229,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             reply_markup=reply_markup,
                         )
                 else:
-                    await update.message.reply_text(movie_info, parse_mode="HTML")
+                    await update.message.reply_text(
+                        movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
+                        parse_mode="HTML"
+                    )
             else:
                 await update.message.reply_text(
                     f"📭 <b>{movie_code}</b> kodli kino topilmadi.\n\n"

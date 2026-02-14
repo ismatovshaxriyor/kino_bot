@@ -250,29 +250,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         # Video yuborish (ma'lumot bilan)
-        if movie.file_id:
-            try:
-                await context.bot.send_video(
-                    chat_id=update.effective_chat.id,
-                    video=movie.file_id,
-                    caption=movie_info,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-            except BadRequest:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-        else:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=movie_info + "\n\n⚠️ Video fayl topilmadi.",
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
+
 
     # Ortga
     elif data == "user_back":
