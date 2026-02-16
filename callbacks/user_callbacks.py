@@ -198,11 +198,20 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if row:
                 btns.append(row)
 
-            await query.edit_message_text(
-                text=movie_info,
-                reply_markup=InlineKeyboardMarkup(btns),
-                parse_mode="HTML"
-            )
+            if query.message.text:
+                await query.edit_message_text(
+                    text=movie_info,
+                    reply_markup=InlineKeyboardMarkup(btns),
+                    parse_mode="HTML"
+                )
+            else:
+                await query.delete_message()
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=movie_info,
+                    reply_markup=InlineKeyboardMarkup(btns),
+                    parse_mode="HTML"
+                )
             return
 
         # Qismsiz kino — to'g'ridan-to'g'ri video
