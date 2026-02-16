@@ -355,6 +355,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     video=movie.file_id,
                     caption=movie_info,
+                    parse_mode="HTML",
                     reply_markup=reply_markup
                 )
             except BadRequest as e:
