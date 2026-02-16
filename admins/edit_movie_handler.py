@@ -684,7 +684,7 @@ async def select_part_action_callback(update: Update, context: ContextTypes.DEFA
         return await create_part_movie_helper(update, context, copy_from_parent=True)
 
     if data == "new_part_data":
-        await query.edit_message_text("✍️ <b>Yilni kiriting:</b>\n\n(Masalan: 2024)")
+        await query.edit_message_text("✍️ <b>Yilni kiriting:</b>\n\n(Masalan: 2024)", parse_mode="HTML")
         return WAITING_PART_YEAR
 
     return SELECTING_PART_ACTION
@@ -696,12 +696,12 @@ async def receive_part_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_PART_YEAR
 
     context.user_data['new_part_year'] = int(text)
-    await update.message.reply_text("✍️ <b>Tavsifni kiriting:</b>")
+    await update.message.reply_text("✍️ <b>Tavsifni kiriting:</b>", parse_mode="HTML")
     return WAITING_PART_DESC
 
 async def receive_part_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['new_part_desc'] = update.message.text
-    await update.message.reply_text("✍️ <b>Davomiylikni kiriting (daqiqada):</b>\n\n(Masalan: 120)")
+    await update.message.reply_text("✍️ <b>Davomiylikni kiriting (daqiqada):</b>\n\n(Masalan: 120)", parse_mode="HTML")
     return WAITING_PART_DURATION
 
 async def receive_part_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -753,7 +753,10 @@ async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 edit_movie_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$")],
     states={
-        SELECTING_ACTION: [CallbackQueryHandler(select_field_callback, pattern=EDIT_MENU_PATTERN)],
+        SELECTING_ACTION: [
+            CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$"),
+            CallbackQueryHandler(select_field_callback, pattern=EDIT_MENU_PATTERN),
+        ],
         WAITING_INPUT: [
             MessageHandler(filters.VIDEO, receive_part_video),
             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value),

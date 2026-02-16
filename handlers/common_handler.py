@@ -118,6 +118,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     else:
         # Kod orqali qidirish (state = None bo'lganda raqam yuborilsa)
+        if not update.message or not update.message.text:
+            return
+
         text = update.message.text.strip()
 
         if text.isdigit():
