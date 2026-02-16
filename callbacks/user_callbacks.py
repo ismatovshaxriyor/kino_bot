@@ -524,6 +524,15 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+        # Qismlar menyusiga qaytish (agar qismli kino bo'lsa)
+        if movie.parent_movie_id:
+            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
+        else:
+            child_count = await Movie.filter(parent_movie=movie).count()
+            if child_count > 0:
+                 btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         if query.message.caption:
@@ -588,16 +597,27 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_caption += f"\n📝 <b>Tavsif:</b> {desc}\n"
         new_caption += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
 
+        btns = []
+        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
+            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+        if movie.parent_movie_id:
+            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
+        elif await Movie.filter(parent_movie=movie).count() > 0:
+             btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+
+        reply_markup = InlineKeyboardMarkup(btns) if btns else None
+
         if query.message.caption:
             await query.edit_message_caption(
                 caption=new_caption,
-                reply_markup=None,
+                reply_markup=reply_markup,
                 parse_mode="HTML"
             )
         else:
             await query.edit_message_text(
                 text=new_caption,
-                reply_markup=None,
+                reply_markup=reply_markup,
                 parse_mode="HTML"
             )
 
