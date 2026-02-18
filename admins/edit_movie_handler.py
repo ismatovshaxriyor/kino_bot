@@ -537,10 +537,8 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             movie.movie_duration = int(new_value)
         elif edit_field == 'edit_field_desc':
             movie.movie_description = new_value
-        elif edit_field == 'edit_field_file':
-            movie.file_id = new_value
-        elif edit_field == 'add_part_file':
-            await show_error("Iltimos, video yuboring! Matn qabul qilinmaydi.")
+        elif edit_field in ('edit_field_file', 'add_part_file'):
+            await show_error("⚠️ Iltimos, video yuboring! Matn qabul qilinmaydi.")
             return WAITING_INPUT
 
         await movie.save()
@@ -556,6 +554,18 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Video qabul qilish (qism qo'shish uchun)"""
     edit_field = context.user_data.get('edit_field')
     movie_id = context.user_data.get('edit_movie_id')
+
+    if edit_field == 'edit_field_file':
+        # Kinoning file_id sini yangilash
+        file_id = update.message.video.file_id
+        movie = await Movie.get_or_none(movie_id=movie_id)
+        if not movie:
+            await update.message.reply_text("❌ Kino topilmadi.")
+            return ConversationHandler.END
+        movie.file_id = file_id
+        await movie.save()
+        await update.message.reply_text("✅ Video muvaffaqiyatli saqlandi!")
+        return await start_edit_movie(update, context, movie_id)
 
     if edit_field != 'add_part_file':
         # Bu holatda video kutilmaydi
