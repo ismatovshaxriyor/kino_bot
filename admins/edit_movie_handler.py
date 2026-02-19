@@ -125,16 +125,17 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
 
         if msg_id:
             try:
-                # Avval caption o'zgartirib ko'rish (video bo'lsa)
-                await context.bot.edit_message_caption(
-                    chat_id=chat_id, message_id=msg_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
+                # Xabar turini tekshirish
+                # Avval text o'zgartirib ko'rish (ko'p holat text bo'ladi)
+                await context.bot.edit_message_text(
+                    chat_id=chat_id, message_id=msg_id, text=text, reply_markup=keyboard, parse_mode="HTML"
                 )
                 success = True
             except Exception:
                 try:
-                    # Agar caption bo'lmasa, text o'zgartirish
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id, message_id=msg_id, text=text, reply_markup=keyboard, parse_mode="HTML"
+                    # Agar text bo'lmasa, caption o'zgartirish (video bo'lsa)
+                    await context.bot.edit_message_caption(
+                        chat_id=chat_id, message_id=msg_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
                     )
                     success = True
                 except Exception:

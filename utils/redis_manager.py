@@ -3,6 +3,7 @@ import asyncio
 import redis.asyncio as redis
 from telegram import Bot
 from telegram.error import BadRequest
+from .settings import ADMIN_ID
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -184,7 +185,21 @@ async def run_worker(bot_token: str):
                 method = msg.get("method")
                 content = str(msg.get("content", ""))[:80]
                 chat_id = msg.get("chat_id")
-                print(f"❌ Worker Xatoligi: {e} | method={method} chat_id={chat_id} content={content}")
+                error_text = f"❌ Worker Xatoligi: {e} | method={method} chat_id={chat_id} content={content}"
+                print(error_text)
             else:
-                print(f"❌ Worker Xatoligi: {e}")
+                error_text = f"❌ Worker Xatoligi: {e}"
+                print(error_text)
+
+            # Adminga xabar yuborish
+            try:
+                await _original_send_message(
+                    bot,
+                    chat_id=ADMIN_ID,
+                    text=f"🚨 <b>Worker Xatoligi:</b>\n\n<code>{str(e)[:500]}</code>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+
             await asyncio.sleep(0.1)
