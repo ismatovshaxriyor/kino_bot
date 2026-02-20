@@ -165,20 +165,41 @@ async def run_worker(bot_token: str):
                     print(f"✅ VID: {chat_id}")
 
                 elif method == "edit_message_text":
-                    await _original_edit_message_text(bot, text=content, chat_id=chat_id, **args)
-                    print(f"✅ EDIT TXT: {chat_id}")
+                    try:
+                        await _original_edit_message_text(bot, text=content, chat_id=chat_id, **args)
+                        print(f"✅ EDIT TXT: {chat_id}")
+                    except BadRequest as e:
+                        if "message is not modified" in str(e).lower():
+                            pass
+                        else:
+                            raise
 
                 elif method == "edit_message_caption":
-                    await _original_edit_message_caption(bot, caption=content, chat_id=chat_id, **args)
-                    print(f"✅ EDIT CAP: {chat_id}")
+                    try:
+                        await _original_edit_message_caption(bot, caption=content, chat_id=chat_id, **args)
+                        print(f"✅ EDIT CAP: {chat_id}")
+                    except BadRequest as e:
+                        if "message is not modified" in str(e).lower():
+                            pass
+                        else:
+                            raise
 
                 elif method == "edit_message_reply_markup":
-                    await _original_edit_message_reply_markup(bot, chat_id=chat_id, **args)
-                    print(f"✅ EDIT MKP: {chat_id}")
+                    try:
+                        await _original_edit_message_reply_markup(bot, chat_id=chat_id, **args)
+                        print(f"✅ EDIT MKP: {chat_id}")
+                    except BadRequest as e:
+                        if "message is not modified" in str(e).lower():
+                            pass
+                        else:
+                            raise
 
                 elif method == "delete_message":
-                    await _original_delete_message(bot, chat_id=chat_id, **args)
-                    print(f"✅ DEL: {chat_id}")
+                    try:
+                        await _original_delete_message(bot, chat_id=chat_id, **args)
+                        print(f"✅ DEL: {chat_id}")
+                    except BadRequest:
+                        pass  # Eski xabarni o'chirib bo'lmasa — e'tiborsiz qoldirish
 
         except Exception as e:
             if msg:
