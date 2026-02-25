@@ -8,6 +8,7 @@ from services import ai_assistant
 from database import User, Movie, UserMovieHistory, Rating
 from utils import error_notificator, ADMIN_ID, MANAGER_ID
 from utils.decorators import channel_subscription_required, user_registered_required
+from callbacks.user_callbacks import _get_part_nav_buttons
 
 DAILY_LIMIT = 3
 MOVIES_PER_PAGE = 15
@@ -212,6 +213,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Admin tahrirlash
                 if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
                     btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+                # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
+                nav_btns = await _get_part_nav_buttons(movie)
+                btns.extend(nav_btns)
 
                 reply_markup = InlineKeyboardMarkup(btns) if btns else None
 

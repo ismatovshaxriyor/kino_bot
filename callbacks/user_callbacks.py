@@ -306,6 +306,10 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
+        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
+        nav_btns = await _get_part_nav_buttons(movie)
+        btns.extend(nav_btns)
+
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         # Video yuborish (ma'lumot bilan)
