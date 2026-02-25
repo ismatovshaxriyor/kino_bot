@@ -64,6 +64,17 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ <b>Iltimos, faqat raqam kiriting.</b>", parse_mode="HTML")
         return ADD_MOVIE
 
+    # Duplikat tekshiruv
+    existing = await Movie.get_or_none(movie_code=int(movie_code))
+    if existing:
+        await update.message.reply_text(
+            f"⚠️ <b>Bu kod band!</b>\n\n"
+            f"📥 Kod <code>{movie_code}</code> allaqachon <b>{existing.movie_name}</b> kinosiga biriktirilgan.\n\n"
+            f"Boshqa kod kiriting:",
+            parse_mode="HTML"
+        )
+        return ADD_MOVIE
+
     context.user_data["movie_code"] = movie_code
 
     try:
