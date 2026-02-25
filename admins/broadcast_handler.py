@@ -121,8 +121,11 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     total = await User.all().count()
 
-    # Status xabari
-    status_msg = await query.edit_message_text(
+    # Status xabari — query.message dan chat_id va message_id olamiz
+    status_chat_id = query.message.chat_id
+    status_msg_id = query.message.message_id
+
+    await query.edit_message_text(
         f"📤 <b>Yuborilmoqda...</b>\n\n"
         f"📊 0/{total} | ✅ 0 | ❌ 0",
         parse_mode="HTML",
@@ -134,8 +137,8 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot=context.bot,
             from_chat_id=from_chat_id,
             msg_id=msg_id,
-            status_chat_id=status_msg.chat_id,
-            status_msg_id=status_msg.message_id,
+            status_chat_id=status_chat_id,
+            status_msg_id=status_msg_id,
         )
     )
 
