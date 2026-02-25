@@ -8,3 +8,4 @@ from .add_movie import *
 from .channel_handlers import *
 from .edit_movie_handler import *
 from .statistics_handler import *
+from .broadcast_handler import *

@@ -14,6 +14,9 @@ admin_btns = [
         KeyboardButton("📊 Statistika")
     ],
     [
+        KeyboardButton("📣 Xabar yuborish"),
+    ],
+    [
         KeyboardButton("🔙 Ortga")
     ]
 ]

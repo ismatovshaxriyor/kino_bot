@@ -23,6 +23,7 @@ def main():
 
     bot.add_handler(add_movie_conf_handler)
     bot.add_handler(edit_movie_handler)
+    bot.add_handler(broadcast_conv_handler)
 
     # Admin handlers
     # Admin handlers - Only Private

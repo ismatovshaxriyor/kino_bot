@@ -74,7 +74,7 @@ async def get_top_keyboard(filter_type: str = "rating", page: int = 1):
     btns = []
     for movie in current_movies:
         metric = _movie_metric(movie, filter_type)
-        text = f"🎬 {movie.movie_name} ({movie.movie_year or '?'}) {metric}"
+        text = f"{metric} 🎬 {movie.movie_name} ({movie.movie_year or '?'})"
         btns.append([InlineKeyboardButton(text, callback_data=f"umovie_{movie.movie_id}")])
 
     nav_row = []
