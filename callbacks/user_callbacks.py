@@ -24,6 +24,56 @@ async def _safe_answer(query, *args, **kwargs) -> bool:
         raise
 
 
+async def _get_part_nav_buttons(movie) -> list:
+    """Qismli kino uchun oldingi/keyingi navigatsiya tugmalarini qaytaradi"""
+    if not movie.parent_movie_id:
+        # Parent kino (container) — bolalari bormi?
+        child_count = await Movie.filter(parent_movie=movie).count()
+        if child_count > 0:
+            return [[InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")]]
+        return []
+
+    parent_id = movie.parent_movie_id
+    parent = await Movie.get_or_none(movie_id=parent_id)
+    if not parent:
+        return []
+
+    # Barcha qismlarni yig'ish (parent + children)
+    all_parts = []
+    if parent.file_id:
+        all_parts.append(parent)  # parent o'zi 1-qism
+    children = await Movie.filter(parent_movie_id=parent_id).order_by('part_number')
+    all_parts.extend(children)
+
+    # Hozirgi kino qaysi indexda?
+    current_idx = None
+    for i, part in enumerate(all_parts):
+        if part.movie_id == movie.movie_id:
+            current_idx = i
+            break
+
+    if current_idx is None:
+        return [[InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{parent_id}")]]
+
+    nav_row = []
+    # ⬅️ Oldingi qism
+    if current_idx > 0:
+        prev_part = all_parts[current_idx - 1]
+        prev_num = current_idx  # 0-indexed -> 1-indexed display
+        nav_row.append(InlineKeyboardButton(f"⬅️ {prev_num}-qism", callback_data=f"uwatch_{prev_part.movie_id}"))
+
+    # 🔙 Qismlar ro'yxati
+    nav_row.append(InlineKeyboardButton("📋 Qismlar", callback_data=f"umovie_{parent_id}"))
+
+    # ➡️ Keyingi qism
+    if current_idx < len(all_parts) - 1:
+        next_part = all_parts[current_idx + 1]
+        next_num = current_idx + 2  # 0-indexed -> 1-indexed display
+        nav_row.append(InlineKeyboardButton(f"➡️ {next_num}-qism", callback_data=f"uwatch_{next_part.movie_id}"))
+
+    return [nav_row]
+
+
 async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 1):
     """Filtrlangan kinolarni olish"""
     offset = (page - 1) * MOVIES_PER_PAGE
@@ -346,14 +396,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
-        # Qismlar menyusiga qaytish (agar qismli kino bo'lsa)
-        if movie.parent_movie_id:
-            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
-        else:
-            # Agar o'zi parent bo'lsa va bolalari bo'lsa
-            child_count = await Movie.filter(parent_movie=movie).count()
-            if child_count > 0:
-                 btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
+        nav_btns = await _get_part_nav_buttons(movie)
+        btns.extend(nav_btns)
 
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
@@ -534,13 +579,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
-        # Qismlar menyusiga qaytish (agar qismli kino bo'lsa)
-        if movie.parent_movie_id:
-            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
-        else:
-            child_count = await Movie.filter(parent_movie=movie).count()
-            if child_count > 0:
-                 btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
+        nav_btns = await _get_part_nav_buttons(movie)
+        btns.extend(nav_btns)
 
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
@@ -610,10 +651,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
-        if movie.parent_movie_id:
-            btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.parent_movie_id}")])
-        elif await Movie.filter(parent_movie=movie).count() > 0:
-             btns.append([InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")])
+        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
+        nav_btns = await _get_part_nav_buttons(movie)
+        btns.extend(nav_btns)
 
         reply_markup = InlineKeyboardMarkup(btns) if btns else None
 

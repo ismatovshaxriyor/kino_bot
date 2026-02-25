@@ -17,11 +17,13 @@ admin_keyboard = ReplyKeyboardMarkup(
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         user_id = update.effective_chat.id
-        if user_id == ADMIN_ID or user_id == MANAGER_ID:
-            admin_btns.insert(-1, [KeyboardButton("👤 Managerlar")])
+        keyboard_rows = [row[:] for row in admin_btns]
+        if user_id in (ADMIN_ID, MANAGER_ID):
+            keyboard_rows.insert(-1, [KeyboardButton("👤 Managerlar")])
+        cancel_keyboard = ReplyKeyboardMarkup(keyboard_rows, resize_keyboard=True, one_time_keyboard=False)
         await update.message.reply_text(
             "❌ <b>Kino qo'shish bekor qilindi.</b>",
-            reply_markup=admin_keyboard,
+            reply_markup=cancel_keyboard,
             parse_mode="HTML",
         )
     elif update.callback_query:
