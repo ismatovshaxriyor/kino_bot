@@ -52,41 +52,22 @@ async def receive_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CONFIRM_BROADCAST
 
 
-async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tasdiqlash — barcha userlarga yuborish"""
-    query = update.callback_query
-    await query.answer()
-
-    msg_id = context.user_data.get('broadcast_msg_id')
-    from_chat_id = context.user_data.get('broadcast_chat_id')
-
-    if not msg_id or not from_chat_id:
-        await query.edit_message_text("❌ Xato: xabar topilmadi.")
-        return ConversationHandler.END
-
+async def _broadcast_worker(bot, from_chat_id: int, msg_id: int, status_chat_id: int, status_msg_id: int):
+    """Background task: barcha userlarga xabar yuborish"""
     users = await User.all()
     total = len(users)
     sent = 0
     blocked = 0
 
-    # Status xabari
-    status_msg = await query.edit_message_text(
-        f"📤 <b>Yuborilmoqda...</b>\n\n"
-        f"📊 0/{total} | ✅ 0 | ❌ 0",
-        parse_mode="HTML",
-    )
-
     for i, user in enumerate(users):
         try:
-            await context.bot.copy_message(
+            await bot.copy_message(
                 chat_id=user.telegram_id,
                 from_chat_id=from_chat_id,
                 message_id=msg_id,
             )
             sent += 1
-        except Forbidden:
-            blocked += 1
-        except BadRequest:
+        except (Forbidden, BadRequest):
             blocked += 1
         except Exception:
             blocked += 1
@@ -94,9 +75,13 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Progress: har 50 ta userda yangilash
         if (i + 1) % 50 == 0 or (i + 1) == total:
             try:
-                await status_msg.edit_text(
-                    f"📤 <b>Yuborilmoqda...</b>\n\n"
-                    f"📊 {i + 1}/{total} | ✅ {sent} | ❌ {blocked}",
+                await bot.edit_message_text(
+                    chat_id=status_chat_id,
+                    message_id=status_msg_id,
+                    text=(
+                        f"📤 <b>Yuborilmoqda...</b>\n\n"
+                        f"📊 {i + 1}/{total} | ✅ {sent} | ❌ {blocked}"
+                    ),
                     parse_mode="HTML",
                 )
             except Exception:
@@ -107,15 +92,52 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Yakuniy natija
     try:
-        await status_msg.edit_text(
-            f"✅ <b>Yuborish yakunlandi!</b>\n\n"
-            f"📊 Jami: {total}\n"
-            f"✅ Yuborildi: {sent}\n"
-            f"❌ Blok/xato: {blocked}",
+        await bot.edit_message_text(
+            chat_id=status_chat_id,
+            message_id=status_msg_id,
+            text=(
+                f"✅ <b>Yuborish yakunlandi!</b>\n\n"
+                f"📊 Jami: {total}\n"
+                f"✅ Yuborildi: {sent}\n"
+                f"❌ Blok/xato: {blocked}"
+            ),
             parse_mode="HTML",
         )
     except Exception:
         pass
+
+
+async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tasdiqlash — background task orqali barcha userlarga yuborish"""
+    query = update.callback_query
+    await query.answer()
+
+    msg_id = context.user_data.get('broadcast_msg_id')
+    from_chat_id = context.user_data.get('broadcast_chat_id')
+
+    if not msg_id or not from_chat_id:
+        await query.edit_message_text("❌ Xato: xabar topilmadi.")
+        return ConversationHandler.END
+
+    total = await User.all().count()
+
+    # Status xabari
+    status_msg = await query.edit_message_text(
+        f"📤 <b>Yuborilmoqda...</b>\n\n"
+        f"📊 0/{total} | ✅ 0 | ❌ 0",
+        parse_mode="HTML",
+    )
+
+    # Background task ishga tushirish — bot qotib qolmaydi
+    asyncio.create_task(
+        _broadcast_worker(
+            bot=context.bot,
+            from_chat_id=from_chat_id,
+            msg_id=msg_id,
+            status_chat_id=status_msg.chat_id,
+            status_msg_id=status_msg.message_id,
+        )
+    )
 
     return ConversationHandler.END
 
