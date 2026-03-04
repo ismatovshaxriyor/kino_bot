@@ -12,20 +12,28 @@ from utils import admin_required, ADMIN_ID
 @admin_required
 async def file_check_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin 'Tekshirish' tugmasini bosganda — barcha kinolarning file_id sini tekshirish"""
-    status_msg = await update.message.reply_text(
-        "🔍 <b>Tekshirish boshlanmoqda...</b>\n\n"
-        "Barcha kinolarning video fayllari tekshirilmoqda.\n"
-        "Bu biroz vaqt olishi mumkin.",
+    chat_id = update.effective_chat.id
+    admin_id = update.effective_user.id
+
+    # direct=True — Redis ni chetlab o'tish, chunki bizga message_id kerak
+    status_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "🔍 <b>Tekshirish boshlanmoqda...</b>\n\n"
+            "Barcha kinolarning video fayllari tekshirilmoqda.\n"
+            "Bu biroz vaqt olishi mumkin."
+        ),
         parse_mode="HTML",
+        direct=True,
     )
 
     # Background task ishga tushirish
     asyncio.create_task(
         _check_files_worker(
             bot=context.bot,
-            status_chat_id=status_msg.chat_id,
+            status_chat_id=chat_id,
             status_msg_id=status_msg.message_id,
-            admin_id=update.effective_user.id,
+            admin_id=admin_id,
         )
     )
 
