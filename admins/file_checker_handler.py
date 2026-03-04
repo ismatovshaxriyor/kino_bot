@@ -93,7 +93,16 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
         try:
             await bot.get_file(movie.file_id)
             valid += 1
-        except (BadRequest, Exception):
+        except BadRequest as e:
+            error_text = str(e).lower()
+            if "wrong file identifier" in error_text or "wrong remote file" in error_text:
+                # Haqiqatan yaroqsiz file_id
+                info = await _get_movie_label(movie)
+                invalid_items.append(info)
+            else:
+                # "file is too big" yoki boshqa xato — fayl yaroqli
+                valid += 1
+        except Exception:
             info = await _get_movie_label(movie)
             invalid_items.append(info)
 
