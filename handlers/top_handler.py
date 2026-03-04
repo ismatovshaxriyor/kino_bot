@@ -23,9 +23,9 @@ def get_top_title(filter_type: str) -> str:
 def get_top_filter_keyboard() -> InlineKeyboardMarkup:
     btns = [
         [
-            InlineKeyboardButton("Ko'rishlar", callback_data="utop_filter_views"),
-            InlineKeyboardButton("Reyting", callback_data="utop_filter_rating"),
-            InlineKeyboardButton("Yangi", callback_data="utop_filter_recent"),
+            InlineKeyboardButton("👁 Ko'rishlar", callback_data="utop_filter_views"),
+            InlineKeyboardButton("🏆 Reyting", callback_data="utop_filter_rating"),
+            InlineKeyboardButton("📅 Yangi", callback_data="utop_filter_recent"),
         ]
     ]
     return InlineKeyboardMarkup(btns)
@@ -89,7 +89,7 @@ async def get_top_keyboard(filter_type: str = "rating", page: int = 1):
     if nav_row:
         btns.append(nav_row)
 
-    btns.append([InlineKeyboardButton("Filtrlar", callback_data="utop_filter_menu")])
+    btns.append([InlineKeyboardButton("🔄 Filtrlar", callback_data="utop_filter_menu")])
     return InlineKeyboardMarkup(btns), total, total_pages
 
 
