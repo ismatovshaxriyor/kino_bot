@@ -664,20 +664,8 @@ async def create_part_movie_helper(update: Update, context: ContextTypes.DEFAULT
     else:
          await update.message.reply_text(msg_text, parse_mode="HTML")
 
-
-    # Kinolar ro'yxatiga qaytish
-    page = context.user_data.get('MOVIE_PAGE', 1)
-    data = await get_movies_page(page)
-    reply_markup = get_movies_keyboard(data['movies'], page, data['has_prev'], data['has_next'])
-
-    text = f"🎬 <b>Kinolar ro'yxati (Sahifa: {page}):</b>"
-    if update.callback_query:
-        await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
-
-    context.user_data['state'] = None
-    return ConversationHandler.END
+    # Kino detail sahifasiga qaytish
+    return await start_edit_movie(update, context, movie_id=movie_id)
 
 
 async def select_part_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
