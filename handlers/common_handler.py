@@ -172,7 +172,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Qismsiz kino — hozirgi mantiq
                 # Janrlar ro'yxati
-                genres = await movie.movie_genre.all()
+                genres = await movie.movie_genre.all().order_by('name')
                 genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
 
                 # Davlatlar ro'yxati

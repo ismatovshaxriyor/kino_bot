@@ -86,7 +86,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         context.user_data['state'] = None
         return ConversationHandler.END
 
-    movie_genres = await movie.movie_genre.all()
+    movie_genres = await movie.movie_genre.all().order_by('name')
     movie_countries = await movie.movie_country.all()
 
     keyboard = InlineKeyboardMarkup([
@@ -212,12 +212,12 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await _edit_message(query, "⚠️ Kino topilmadi.")
             return ConversationHandler.END
 
-        genres = await Genre.all()
+        genres = await Genre.all().order_by('name')
         if not genres:
             await query.answer("Janrlar ro'yxati bo'sh.", show_alert=True)
             return SELECTING_ACTION
 
-        selected_genres = await movie.movie_genre.all()
+        selected_genres = await movie.movie_genre.all().order_by('name')
         context.user_data["edit_genre_ids"] = [g.genre_id for g in selected_genres]
         keyboard = _build_genre_keyboard(genres, context.user_data["edit_genre_ids"])
         await _edit_message(query, "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.", keyboard)
@@ -231,7 +231,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             selected.append(genre_id)
 
-        genres = await Genre.all()
+        genres = await Genre.all().order_by('name')
         keyboard = _build_genre_keyboard(genres, selected)
         await _edit_message(query, "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.", keyboard)
         return SELECTING_ACTION
@@ -246,7 +246,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         selected_ids = context.user_data.pop("edit_genre_ids", [])
         await movie.movie_genre.clear()
         if selected_ids:
-            genres = await Genre.filter(genre_id__in=selected_ids)
+            genres = await Genre.filter(genre_id__in=selected_ids).order_by('name')
             await movie.movie_genre.add(*genres)
 
         await query.answer("✅ Janrlar yangilandi.", show_alert=True)

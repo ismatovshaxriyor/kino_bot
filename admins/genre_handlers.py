@@ -6,7 +6,7 @@ from utils import error_notificator, admin_required
 
 
 async def get_genre_btns():
-    genres = await Genre.all()
+    genres = await Genre.all().order_by('name')
     genre_btns = []
 
     if genres:

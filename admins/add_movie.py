@@ -111,7 +111,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.delete()
 
-    genres = await Genre.all()
+    genres = await Genre.all().order_by('name')
     genre_btns = []
 
     if genres:
@@ -171,7 +171,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 genres.append(data)
 
-            genres = await Genre.all()
+            genres = await Genre.all().order_by('name')
             genre_btns = []
 
             movie_genres = context.user_data["genres"]
@@ -513,7 +513,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     keyboard = InlineKeyboardMarkup(confirm_btns)
-    genres = await Genre.filter(genre_id__in=context.user_data.get('genres', []))
+    genres = await Genre.filter(genre_id__in=context.user_data.get('genres', [])).order_by('name')
     genres_name = ", ".join(g.name for g in genres)
 
     countries = await Countries.filter(country_id__in=context.user_data.get('countries', []))
@@ -587,7 +587,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             genre_ids = context.user_data.get('genres', [])
             if genre_ids:
-                genres = await Genre.filter(genre_id__in=genre_ids)
+                genres = await Genre.filter(genre_id__in=genre_ids).order_by('name')
                 await movie.movie_genre.add(*genres)
 
             country_ids = context.user_data.get('countries', [])

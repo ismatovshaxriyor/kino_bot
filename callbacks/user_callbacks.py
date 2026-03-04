@@ -266,7 +266,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Qismsiz kino — to'g'ridan-to'g'ri video
         # Janrlar ro'yxati
-        genres = await movie.movie_genre.all()
+        genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar ro'yxati
@@ -356,7 +356,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await history.save()
 
         # Janrlar ro'yxati
-        genres = await movie.movie_genre.all()
+        genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar ro'yxati
@@ -556,7 +556,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _safe_answer(query, "⚠️ Xatolik yuz berdi.", show_alert=True)
             return
 
-        genres = await movie.movie_genre.all()
+        genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
         countries = await movie.movie_country.all()
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
@@ -631,7 +631,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         new_rating_text = f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)"
 
-        genres = await movie.movie_genre.all()
+        genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
         countries = await movie.movie_country.all()
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"

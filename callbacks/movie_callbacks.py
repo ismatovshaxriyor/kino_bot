@@ -22,7 +22,7 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Janrlar
-        genres = await movie.movie_genre.all()
+        genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar

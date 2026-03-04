@@ -114,7 +114,7 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
         await update.message.reply_text(f"📭 <b>{movie_code}</b> kodli kino topilmadi.", parse_mode="HTML")
         return
 
-    genres = await movie.movie_genre.all()
+    genres = await movie.movie_genre.all().order_by('name')
     genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
 
     countries = await movie.movie_country.all()
