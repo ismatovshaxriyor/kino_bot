@@ -15,6 +15,7 @@ admin_btns = [
     ],
     [
         KeyboardButton("📣 Xabar yuborish"),
+        KeyboardButton("🔍 Tekshirish"),
     ],
     [
         KeyboardButton("🔙 Ortga")

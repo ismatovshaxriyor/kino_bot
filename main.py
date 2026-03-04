@@ -35,6 +35,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar") & private_filter, get_movies))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar") & private_filter, get_channels))
     bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika") & private_filter, statistics_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🔍 Tekshirish") & private_filter, file_check_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga") & private_filter, admin_back_handler))
 
     # User handlers - Only Private

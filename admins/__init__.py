@@ -9,3 +9,4 @@ from .channel_handlers import *
 from .edit_movie_handler import *
 from .statistics_handler import *
 from .broadcast_handler import *
+from .file_checker_handler import *
