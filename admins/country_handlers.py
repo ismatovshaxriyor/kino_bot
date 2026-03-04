@@ -6,7 +6,7 @@ from utils import error_notificator, admin_required
 
 
 async def get_country_btns():
-    countries = await Countries.all()
+    countries = await Countries.all().order_by('name')
     country_btns = []
 
     if countries:

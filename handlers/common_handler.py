@@ -176,7 +176,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
 
                 # Davlatlar ro'yxati
-                countries = await movie.movie_country.all()
+                countries = await movie.movie_country.all().order_by('name')
                 countries_text = ", ".join([c.name for c in countries]) if countries else "Noma'lum"
 
                 # Kino ma'lumotlari

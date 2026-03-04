@@ -26,7 +26,7 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar
-        countries = await movie.movie_country.all()
+        countries = await movie.movie_country.all().order_by('name')
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
 
         text = (

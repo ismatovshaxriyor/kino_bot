@@ -270,7 +270,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar ro'yxati
-        countries = await movie.movie_country.all()
+        countries = await movie.movie_country.all().order_by('name')
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
 
         # Kino ma'lumotlari
@@ -360,7 +360,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
 
         # Davlatlar ro'yxati
-        countries = await movie.movie_country.all()
+        countries = await movie.movie_country.all().order_by('name')
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
 
         # Kino ma'lumotlari
@@ -558,7 +558,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-        countries = await movie.movie_country.all()
+        countries = await movie.movie_country.all().order_by('name')
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
 
         movie_info = (
@@ -633,7 +633,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         genres = await movie.movie_genre.all().order_by('name')
         genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-        countries = await movie.movie_country.all()
+        countries = await movie.movie_country.all().order_by('name')
         countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
 
         new_caption = (

@@ -87,7 +87,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         return ConversationHandler.END
 
     movie_genres = await movie.movie_genre.all().order_by('name')
-    movie_countries = await movie.movie_country.all()
+    movie_countries = await movie.movie_country.all().order_by('name')
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(f"📝 Nomi: {movie.movie_name[:20]}...", callback_data="edit_field_name")],
@@ -259,12 +259,12 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await _edit_message(query, "⚠️ Kino topilmadi.")
             return ConversationHandler.END
 
-        countries = await Countries.all()
+        countries = await Countries.all().order_by('name')
         if not countries:
             await query.answer("Davlatlar ro'yxati bo'sh.", show_alert=True)
             return SELECTING_ACTION
 
-        selected_countries = await movie.movie_country.all()
+        selected_countries = await movie.movie_country.all().order_by('name')
         context.user_data["edit_country_ids"] = [c.country_id for c in selected_countries]
         keyboard = _build_country_keyboard(countries, context.user_data["edit_country_ids"])
         await _edit_message(query, "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.", keyboard)
@@ -278,7 +278,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             selected.append(country_id)
 
-        countries = await Countries.all()
+        countries = await Countries.all().order_by('name')
         keyboard = _build_country_keyboard(countries, selected)
         await _edit_message(query, "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.", keyboard)
         return SELECTING_ACTION
@@ -293,7 +293,7 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         selected_ids = context.user_data.pop("edit_country_ids", [])
         await movie.movie_country.clear()
         if selected_ids:
-            countries = await Countries.filter(country_id__in=selected_ids)
+            countries = await Countries.filter(country_id__in=selected_ids).order_by('name')
             await movie.movie_country.add(*countries)
 
         await query.answer("✅ Davlatlar yangilandi.", show_alert=True)

@@ -200,7 +200,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     context.user_data['last_msg'] = msg.message_id
                 return GET_NAME
         elif data == 'confirm':
-            countries = await Countries.all()
+            countries = await Countries.all().order_by('name')
             country_btns = []
 
             if countries:
@@ -259,7 +259,7 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 countries.append(data)
 
-            countries = await Countries.all()
+            countries = await Countries.all().order_by('name')
             country_btns = []
 
             movie_countries = context.user_data["countries"]
@@ -516,7 +516,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     genres = await Genre.filter(genre_id__in=context.user_data.get('genres', [])).order_by('name')
     genres_name = ", ".join(g.name for g in genres)
 
-    countries = await Countries.filter(country_id__in=context.user_data.get('countries', []))
+    countries = await Countries.filter(country_id__in=context.user_data.get('countries', [])).order_by('name')
     countries_name = ", ".join(c.name for c in countries)
     duration_text = (
         escape(str(context.user_data['movie_duration']))
@@ -592,7 +592,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             country_ids = context.user_data.get('countries', [])
             if country_ids:
-                countries = await Countries.filter(country_id__in=country_ids)
+                countries = await Countries.filter(country_id__in=country_ids).order_by('name')
                 await movie.movie_country.add(*countries)
 
             await query.message.reply_text(
