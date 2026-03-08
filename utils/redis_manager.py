@@ -3,7 +3,7 @@ import asyncio
 import redis.asyncio as redis
 from telegram import Bot
 from telegram.error import BadRequest
-from .settings import ADMIN_ID
+from .settings import ADMIN_ID, MANAGER_ID
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -153,34 +153,35 @@ async def run_worker(bot_token: str):
                         await _original_send_video(bot, chat_id=chat_id, video=content, **args)
                     except BadRequest as e:
                         error_msg = str(e)
-                        # Video yuborib bo'lmasa — caption ni text sifatida yuborish
-                        fallback_text = args.get("caption") or "⚠️ Bu video fayli endi mavjud emas yoki noto'g'ri."
-                        fallback_args = {}
-                        if "parse_mode" in args:
-                            fallback_args["parse_mode"] = args["parse_mode"]
-                        if "reply_markup" in args:
-                            fallback_args["reply_markup"] = args["reply_markup"]
+                        # Foydalanuvchiga do'stona xabar yuborish
+                        user_text = (
+                            "😔 <b>Kechirasiz!</b>\n\n"
+                            "Bu kino hozirda texnik nosozlik tufayli ko'rsatilmayapti.\n"
+                            "Adminlar xabardor qilindi va tez orada tuzatiladi! 🔧"
+                        )
                         try:
-                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text + "\n\n⚠️ Video yuborib bo'lmadi.", **fallback_args)
+                            fallback_args = {}
+                            if "reply_markup" in args:
+                                fallback_args["reply_markup"] = args["reply_markup"]
+                            await _original_send_message(bot, chat_id=chat_id, text=user_text, parse_mode="HTML", **fallback_args)
                         except Exception:
-                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text)
+                            await _original_send_message(bot, chat_id=chat_id, text=user_text, parse_mode="HTML")
 
-                        # Adminga xato sababini yuborish
-                        try:
-                            file_id_short = str(content)[:50] + "..." if len(str(content)) > 50 else str(content)
-                            await _original_send_message(
-                                bot,
-                                chat_id=ADMIN_ID,
-                                text=(
-                                    f"🚨 <b>Video yuborishda xato!</b>\n\n"
-                                    f"❌ <b>Xato:</b> <code>{error_msg[:200]}</code>\n"
-                                    f"👤 <b>Chat ID:</b> <code>{chat_id}</code>\n"
-                                    f"🎬 <b>File ID:</b> <code>{file_id_short}</code>"
-                                ),
-                                parse_mode="HTML",
-                            )
-                        except Exception:
-                            pass
+                        # Barcha adminlarga xato sababini yuborish
+                        file_id_short = str(content)[:50] + "..." if len(str(content)) > 50 else str(content)
+                        admin_text = (
+                            f"🚨 <b>Video yuborishda xato!</b>\n\n"
+                            f"❌ <b>Xato:</b> <code>{error_msg[:200]}</code>\n"
+                            f"👤 <b>Chat ID:</b> <code>{chat_id}</code>\n"
+                            f"🎬 <b>File ID:</b> <code>{file_id_short}</code>\n\n"
+                            f"⚠️ Kinoning videosini qayta yuklash kerak!"
+                        )
+                        for admin_id in (ADMIN_ID, MANAGER_ID):
+                            if admin_id:
+                                try:
+                                    await _original_send_message(bot, chat_id=admin_id, text=admin_text, parse_mode="HTML")
+                                except Exception:
+                                    pass
                     print(f"✅ VID: {chat_id}")
 
                 elif method == "edit_message_text":
