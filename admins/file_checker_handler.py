@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 from database import Movie
 from utils import admin_required, ADMIN_ID
+from utils.redis_manager import _original_send_video, _original_delete_message
 
 
 @admin_required
@@ -87,15 +88,16 @@ async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int 
     """Bitta file_id ni tekshirish. Qaytaradi: (yaroqli: bool, xato: str|None)"""
     for attempt in range(max_retries + 1):
         try:
-            sent = await bot.send_video(
+            # Original send_video — Redis patchini chetlab o'tish
+            sent = await _original_send_video(
+                bot,
                 chat_id=admin_id,
                 video=file_id,
                 disable_notification=True,
-                direct=True,
             )
             # Yuborilgan xabarni darhol o'chirish
             try:
-                await bot.delete_message(chat_id=admin_id, message_id=sent.message_id, direct=True)
+                await _original_delete_message(bot, chat_id=admin_id, message_id=sent.message_id)
             except Exception:
                 pass
             return True, None
