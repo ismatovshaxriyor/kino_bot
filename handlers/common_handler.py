@@ -194,6 +194,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if movie.movie_description:
                     movie_info += f"📝 <b>Tavsif:</b>\n{movie.movie_description[:500]}{'...' if len(movie.movie_description or '') > 500 else ''}\n\n"
 
+                movie_info += f"📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
+
                 # Tarixga yozish
                 user_id = update.effective_user.id
                 user = await User.get(telegram_id=user_id)

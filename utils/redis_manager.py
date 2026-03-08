@@ -178,7 +178,7 @@ async def run_worker(bot_token: str):
                         name_match = re.search(r"🎬\s*<b>(.+?)</b>", caption)
                         if name_match:
                             movie_name = name_match.group(1)
-                        code_match = re.search(r"<code>(\d+)</code>", caption)
+                        code_match = re.search(r"Kod:.*?<code>(\d+)</code>", caption)
                         if code_match:
                             movie_code = code_match.group(1)
 
