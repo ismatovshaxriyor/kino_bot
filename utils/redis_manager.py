@@ -152,16 +152,18 @@ async def run_worker(bot_token: str):
                     try:
                         await _original_send_video(bot, chat_id=chat_id, video=content, **args)
                     except BadRequest as e:
-                        # If file_id is invalid for this bot, send caption/text fallback.
-                        if "wrong file identifier" in str(e).lower():
-                            fallback_text = args.get("caption") or "⚠️ Bu video fayli endi mavjud emas yoki noto'g'ri."
-                            fallback_args = dict(args)
-                            fallback_args.pop("caption", None)
-                            fallback_args.pop("parse_mode", None)
-                            fallback_args.pop("reply_markup", None)
-                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text, **fallback_args)
-                        else:
-                            raise
+                        # Video yuborib bo'lmasa — caption ni text sifatida yuborish
+                        fallback_text = args.get("caption") or "⚠️ Bu video fayli endi mavjud emas yoki noto'g'ri."
+                        fallback_args = {}
+                        if "parse_mode" in args:
+                            fallback_args["parse_mode"] = args["parse_mode"]
+                        if "reply_markup" in args:
+                            fallback_args["reply_markup"] = args["reply_markup"]
+                        try:
+                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text + "\n\n⚠️ Video yuborib bo'lmadi.", **fallback_args)
+                        except Exception:
+                            # parse_mode xato bersa, oddiy text sifatida yuborish
+                            await _original_send_message(bot, chat_id=chat_id, text=fallback_text)
                     print(f"✅ VID: {chat_id}")
 
                 elif method == "edit_message_text":
