@@ -101,7 +101,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
          InlineKeyboardButton(f"🗣 Til: {movie.movie_language.value if movie.movie_language else '-'}", callback_data="edit_field_lang")],
 
         [InlineKeyboardButton("📝 Tavsifni o'zgartirish", callback_data="edit_field_desc")],
-        [InlineKeyboardButton("📁 Fayl ID ni o'zgartirish", callback_data="edit_field_file")],
+        [InlineKeyboardButton("🎥 Video almashtirish", callback_data="edit_field_file")],
 
         [InlineKeyboardButton(f"🎬 Qismlar: {await Movie.filter(parent_movie=movie).count()} ta", callback_data="edit_field_parts")],
 
@@ -445,6 +445,28 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await _edit_message(query, text, InlineKeyboardMarkup(btns))
         return SELECTING_ACTION
 
+    # Video almashtirish — alohida prompt
+    if data == "edit_field_file":
+        context.user_data['edit_field'] = 'edit_field_file'
+        prompt_text = (
+            "🎥 <b>Yangi video yuboring:</b>\n\n"
+            "Video forward qiling yoki to'g'ridan-to'g'ri yuboring.\n\n"
+            "(Bekor qilish uchun /cancel bosing)"
+        )
+        if query.message.caption:
+            await query.edit_message_caption(
+                caption=prompt_text,
+                reply_markup=None,
+                parse_mode="HTML"
+            )
+        else:
+            await query.edit_message_text(
+                text=prompt_text,
+                reply_markup=None,
+                parse_mode="HTML"
+            )
+        return WAITING_INPUT
+
     # Text input talab qiladigan fieldlar
     field_map = {
         'edit_field_name': 'Nomi',
@@ -452,7 +474,6 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
         'edit_field_code': 'Kodi (Dublicate bo\'lmasligi kerak)',
         'edit_field_duration': 'Davomiylik (daqiqada)',
         'edit_field_desc': 'Tavsif',
-        'edit_field_file': 'Fayl ID (Video)',
     }
 
     field_name = field_map.get(data)

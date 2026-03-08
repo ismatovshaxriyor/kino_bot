@@ -169,8 +169,23 @@ async def run_worker(bot_token: str):
 
                         # Barcha adminlarga xato sababini yuborish
                         file_id_short = str(content)[:50] + "..." if len(str(content)) > 50 else str(content)
+                        caption = args.get("caption", "")
+
+                        # Caption'dan kino nomi va kodini olish
+                        import re
+                        movie_name = "Nomalum"
+                        movie_code = "—"
+                        name_match = re.search(r"🎬\s*<b>(.+?)</b>", caption)
+                        if name_match:
+                            movie_name = name_match.group(1)
+                        code_match = re.search(r"<code>(\d+)</code>", caption)
+                        if code_match:
+                            movie_code = code_match.group(1)
+
                         admin_text = (
                             f"🚨 <b>Video yuborishda xato!</b>\n\n"
+                            f"🎬 <b>Kino:</b> {movie_name}\n"
+                            f"📥 <b>Kod:</b> <code>{movie_code}</code>\n"
                             f"❌ <b>Xato:</b> <code>{error_msg[:200]}</code>\n"
                             f"👤 <b>Chat ID:</b> <code>{chat_id}</code>\n"
                             f"🎬 <b>File ID:</b> <code>{file_id_short}</code>\n\n"
