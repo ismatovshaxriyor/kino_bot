@@ -233,13 +233,13 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
 
         # TXT faylni yuborish
         try:
+            from utils.redis_manager import _original_send_message
             with open(report_path, "rb") as doc:
                 await bot.send_document(
                     chat_id=admin_id,
                     document=doc,
                     filename=f"yaroqsiz_kinolar_{datetime.now().strftime('%Y%m%d')}.txt",
                     caption=f"📄 Yaroqsiz kinolar: {len(invalid_items)} ta",
-                    direct=True,
                 )
         except Exception:
             pass
