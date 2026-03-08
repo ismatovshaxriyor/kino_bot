@@ -152,6 +152,7 @@ async def run_worker(bot_token: str):
                     try:
                         await _original_send_video(bot, chat_id=chat_id, video=content, **args)
                     except BadRequest as e:
+                        error_msg = str(e)
                         # Video yuborib bo'lmasa — caption ni text sifatida yuborish
                         fallback_text = args.get("caption") or "⚠️ Bu video fayli endi mavjud emas yoki noto'g'ri."
                         fallback_args = {}
@@ -162,8 +163,24 @@ async def run_worker(bot_token: str):
                         try:
                             await _original_send_message(bot, chat_id=chat_id, text=fallback_text + "\n\n⚠️ Video yuborib bo'lmadi.", **fallback_args)
                         except Exception:
-                            # parse_mode xato bersa, oddiy text sifatida yuborish
                             await _original_send_message(bot, chat_id=chat_id, text=fallback_text)
+
+                        # Adminga xato sababini yuborish
+                        try:
+                            file_id_short = str(content)[:50] + "..." if len(str(content)) > 50 else str(content)
+                            await _original_send_message(
+                                bot,
+                                chat_id=ADMIN_ID,
+                                text=(
+                                    f"🚨 <b>Video yuborishda xato!</b>\n\n"
+                                    f"❌ <b>Xato:</b> <code>{error_msg[:200]}</code>\n"
+                                    f"👤 <b>Chat ID:</b> <code>{chat_id}</code>\n"
+                                    f"🎬 <b>File ID:</b> <code>{file_id_short}</code>"
+                                ),
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
                     print(f"✅ VID: {chat_id}")
 
                 elif method == "edit_message_text":
