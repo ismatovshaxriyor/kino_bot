@@ -2,7 +2,7 @@ import asyncio
 import os
 from datetime import datetime
 from telegram import Update
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden, RetryAfter, TimedOut, NetworkError
 from telegram.ext import ContextTypes
 
 from database import Movie
@@ -67,12 +67,78 @@ async def _get_movie_label(movie) -> dict:
         }
 
 
+# Yaroqli file_id xatolar (fayl bor, lekin texnik cheklov)
+VALID_ERRORS = [
+    "file is too big",        # 20MB+ fayl — lekin ishlaydi
+]
+
+# Yaroqsiz file_id xatolar (fayl buzilgan/eskirgan)
+INVALID_ERRORS = [
+    "wrong file identifier",   # file_id noto'g'ri/buzilgan
+    "wrong remote file",       # remote fayl yaroqsiz
+    "file reference expired",  # file_id eskirgan (Telegram yangilagan)
+    "invalid file_id",         # yaroqsiz format
+    "wrong type",              # noto'g'ri fayl turi
+    "file not found",          # fayl topilmadi
+]
+
+
+async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int = 2):
+    """Bitta file_id ni tekshirish. Qaytaradi: (yaroqli: bool, xato: str|None)"""
+    for attempt in range(max_retries + 1):
+        try:
+            sent = await bot.send_video(
+                chat_id=admin_id,
+                video=file_id,
+                disable_notification=True,
+                direct=True,
+            )
+            # Yuborilgan xabarni darhol o'chirish
+            try:
+                await bot.delete_message(chat_id=admin_id, message_id=sent.message_id, direct=True)
+            except Exception:
+                pass
+            return True, None
+
+        except RetryAfter as e:
+            # Rate limit — kutish va qayta urinish
+            wait_time = e.retry_after + 1
+            await asyncio.sleep(wait_time)
+            continue
+
+        except BadRequest as e:
+            error_text = str(e).lower()
+            # Yaroqli xatolar — fayl bor, texnik cheklov
+            for valid_err in VALID_ERRORS:
+                if valid_err in error_text:
+                    return True, None
+            # Yaroqsiz — fayl buzilgan
+            return False, str(e)
+
+        except Forbidden as e:
+            # Bot bloklangan — bu fayl emas, bot muammosi
+            return True, None
+
+        except (TimedOut, NetworkError) as e:
+            # Tarmoq xatolik — qayta urinish
+            if attempt < max_retries:
+                await asyncio.sleep(2)
+                continue
+            return None, f"Tarmoq xatoligi: {e}"
+
+        except Exception as e:
+            return False, str(e)
+
+    return None, "Max retries exceeded"
+
+
 async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admin_id: int):
     """Background task: barcha kinolarning file_id sini tekshirish"""
     movies = await Movie.filter(file_id__isnull=False, parent_movie_id__isnull=True).order_by('movie_code')
     parts = await Movie.filter(file_id__isnull=False, parent_movie_id__isnull=False).order_by('parent_movie_id', 'part_number')
 
-    all_movies = list(movies) + list(parts)
+    # Bo'sh file_id larni filtrlash
+    all_movies = [m for m in list(movies) + list(parts) if m.file_id and m.file_id.strip()]
     total = len(all_movies)
 
     if total == 0:
@@ -88,23 +154,20 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
 
     valid = 0
     invalid_items = []
+    skipped = 0
 
     for i, movie in enumerate(all_movies):
-        try:
-            await bot.get_file(movie.file_id)
+        is_valid, error = await _check_single_file(bot, admin_id, movie.file_id)
+
+        if is_valid is True:
             valid += 1
-        except BadRequest as e:
-            error_text = str(e).lower()
-            if "wrong file identifier" in error_text or "wrong remote file" in error_text:
-                # Haqiqatan yaroqsiz file_id
-                info = await _get_movie_label(movie)
-                invalid_items.append(info)
-            else:
-                # "file is too big" yoki boshqa xato — fayl yaroqli
-                valid += 1
-        except Exception:
+        elif is_valid is False:
             info = await _get_movie_label(movie)
+            info["error"] = error
             invalid_items.append(info)
+        else:
+            # None — tarmoq xatolik, aniq emas
+            skipped += 1
 
         # Progress: har 30 ta kinoda yangilash
         if (i + 1) % 30 == 0 or (i + 1) == total:
@@ -115,6 +178,7 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
                     text=(
                         f"🔍 <b>Tekshirilmoqda...</b>\n\n"
                         f"📊 {i + 1}/{total} | ✅ {valid} | ❌ {len(invalid_items)}"
+                        + (f" | ⏭ {skipped}" if skipped else "")
                     ),
                     parse_mode="HTML",
                 )
@@ -122,15 +186,17 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
                 pass
 
         # Rate limit himoya
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.3)
 
     # Yakuniy natija
     if invalid_items:
+        skipped_text = f"\n⏭ O'tkazildi (tarmoq xato): {skipped}" if skipped else ""
         result_text = (
             f"⚠️ <b>Tekshirish yakunlandi!</b>\n\n"
             f"📊 Jami: {total}\n"
             f"✅ Yaroqli: {valid}\n"
-            f"❌ Yaroqsiz: {len(invalid_items)}\n\n"
+            f"❌ Yaroqsiz: {len(invalid_items)}"
+            f"{skipped_text}\n\n"
             f"📄 To'liq hisobot fayl sifatida yuborildi."
         )
 
@@ -144,11 +210,14 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
             f.write(f"Jami tekshirildi: {total}\n")
             f.write(f"Yaroqli: {valid}\n")
             f.write(f"Yaroqsiz: {len(invalid_items)}\n")
+            if skipped:
+                f.write(f"O'tkazildi (tarmoq xato): {skipped}\n")
             f.write(f"\n{'='*40}\n\n")
 
             for idx, item in enumerate(invalid_items, 1):
                 f.write(f"--- #{idx} ---\n")
-                f.write(f"{item['detail']}\n\n")
+                f.write(f"{item['detail']}\n")
+                f.write(f"  Xato: {item.get('error', 'Nomalum')}\n\n")
 
         try:
             await bot.edit_message_text(
@@ -168,6 +237,7 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
                     document=doc,
                     filename=f"yaroqsiz_kinolar_{datetime.now().strftime('%Y%m%d')}.txt",
                     caption=f"📄 Yaroqsiz kinolar: {len(invalid_items)} ta",
+                    direct=True,
                 )
         except Exception:
             pass
@@ -179,10 +249,12 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
             pass
 
     else:
+        skipped_text = f"\n⏭ O'tkazildi (tarmoq xato): {skipped}" if skipped else ""
         result_text = (
             f"✅ <b>Tekshirish yakunlandi!</b>\n\n"
             f"📊 Jami: {total}\n"
-            f"✅ Barcha kinolar yaroqli!\n\n"
+            f"✅ Barcha kinolar yaroqli!"
+            f"{skipped_text}\n\n"
             f"Hech qanday yaroqsiz fayl topilmadi. 🎉"
         )
         try:
