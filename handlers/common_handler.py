@@ -217,7 +217,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
                 if movie.movie_code:
-                    btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+                    share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+                    from urllib.parse import quote
+                    share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+                    btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
                 # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
                 nav_btns = await _get_part_nav_buttons(movie)

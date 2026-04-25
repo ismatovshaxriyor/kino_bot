@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
+from urllib.parse import quote
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
@@ -308,7 +309,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -405,7 +408,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -591,7 +596,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -666,7 +673,9 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
