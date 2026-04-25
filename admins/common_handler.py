@@ -7,6 +7,9 @@ from .managers_handler import get_managers_btns
 
 @admin_required
 async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
     state = context.user_data.get('state')
 
     if state is None:

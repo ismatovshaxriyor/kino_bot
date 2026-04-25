@@ -58,6 +58,8 @@ async def add_movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     movie_code = update.message.text.strip()
 
     if not movie_code.isdigit():
@@ -99,6 +101,8 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     movie_name = update.message.text
     context.user_data["movie_name"] = movie_name
 
@@ -309,7 +313,11 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         await update.message.delete()
+    else:
+        return
 
+    if not update.message or not update.message.text:
+        return
     movie_year = update.message.text
     if not movie_year.isdigit():
         msg = await context.bot.send_message(
@@ -428,7 +436,11 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         await update.message.delete()
+    else:
+        return
 
+    if not update.message or not update.message.text:
+        return
     movie_duration = update.message.text
     if not movie_duration.isdigit() and movie_duration != ".":
         msg = await context.bot.send_message(
@@ -467,7 +479,11 @@ async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         await update.message.delete()
+    else:
+        return
 
+    if not update.message or not update.message.text:
+        return
     movie_description = update.message.text
     context.user_data['movie_description'] = movie_description
 
@@ -489,6 +505,9 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.delete_message(update.effective_chat.id, last_msg)
     except Exception as e:
         await error_notificator.notify(context, e, update)
+
+    if not update.message:
+        return
 
     video = update.message.video
 

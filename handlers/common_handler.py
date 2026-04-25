@@ -30,6 +30,9 @@ async def increase_ai_usage(user: User):
 @user_registered_required
 @channel_subscription_required
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
     state = context.user_data.get('state')
 
     if state and state not in ["SEARCH_BY_NAME", "CHAT_WITH_AI"]:
@@ -119,9 +122,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     else:
         # Kod orqali qidirish (state = None bo'lganda raqam yuborilsa)
-        if not update.message or not update.message.text:
-            return
-
         text = update.message.text.strip()
 
         if text.isdigit():

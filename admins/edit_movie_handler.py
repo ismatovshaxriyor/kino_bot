@@ -73,6 +73,7 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
             movie_id = int(query.data.split("_")[2])
         context.user_data['edit_movie_id'] = movie_id
         context.user_data['editor_msg_id'] = query.message.message_id
+        context.user_data['editor_is_caption'] = bool(query.message.caption)
     else:
         # Message handlerdan chaqirilgan
         if movie_id is None:
@@ -124,26 +125,25 @@ async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         success = False
 
         if msg_id:
+            is_caption = context.user_data.get('editor_is_caption', False)
             try:
                 # Xabar turini tekshirish
-                # Avval text o'zgartirib ko'rish (ko'p holat text bo'ladi)
-                await context.bot.edit_message_text(
-                    chat_id=chat_id, message_id=msg_id, text=text, reply_markup=keyboard, parse_mode="HTML"
-                )
-                success = True
-            except Exception:
-                try:
-                    # Agar text bo'lmasa, caption o'zgartirish (video bo'lsa)
+                if is_caption:
                     await context.bot.edit_message_caption(
                         chat_id=chat_id, message_id=msg_id, caption=text, reply_markup=keyboard, parse_mode="HTML"
                     )
-                    success = True
-                except Exception:
-                    pass
+                else:
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id, message_id=msg_id, text=text, reply_markup=keyboard, parse_mode="HTML"
+                    )
+                success = True
+            except Exception:
+                pass
 
         if not success:
             sent_msg = await context.bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
             context.user_data['editor_msg_id'] = sent_msg.message_id
+            context.user_data['editor_is_caption'] = False
 
     return SELECTING_ACTION
 
@@ -501,6 +501,8 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Yangi qiymatni qabul qilish va saqlash"""
     msg = update.message
+    if not msg or not msg.text:
+        return
     new_value = msg.text
     movie_id = context.user_data.get('edit_movie_id')
     edit_field = context.user_data.get('edit_field')
@@ -578,6 +580,8 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     movie_id = context.user_data.get('edit_movie_id')
 
     if edit_field == 'edit_field_file':
+        if not update.message or not update.message.video:
+            return
         # Kinoning file_id sini yangilash
         file_id = update.message.video.file_id
         movie = await Movie.get_or_none(movie_id=movie_id)
@@ -594,6 +598,8 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return WAITING_INPUT
 
     try:
+        if not update.message or not update.message.video:
+            return
         file_id = update.message.video.file_id
         part_number = context.user_data.pop('add_part_number_auto', 2)
         movie = await Movie.get_or_none(movie_id=movie_id)
@@ -710,6 +716,8 @@ async def select_part_action_callback(update: Update, context: ContextTypes.DEFA
     return SELECTING_PART_ACTION
 
 async def receive_part_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     text = update.message.text
     if not text.isdigit():
         await update.message.reply_text("⚠️ Yil raqam bo'lishi kerak! Qaytadan kiriting:")
@@ -720,11 +728,15 @@ async def receive_part_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_PART_DESC
 
 async def receive_part_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     context.user_data['new_part_desc'] = update.message.text
     await update.message.reply_text("✍️ <b>Davomiylikni kiriting (daqiqada):</b>\n\n(Masalan: 120)", parse_mode="HTML")
     return WAITING_PART_DURATION
 
 async def receive_part_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     text = update.message.text
     if not text.isdigit():
         await update.message.reply_text("⚠️ Davomiylik raqam bo'lishi kerak! Qaytadan kiriting:")

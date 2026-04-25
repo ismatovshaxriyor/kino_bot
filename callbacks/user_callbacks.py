@@ -8,6 +8,7 @@ from utils import user_keyboard, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from handlers.history_handler import get_history_keyboard
 from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_top_title
+from utils.error_notificator import error_notificator
 
 
 MOVIES_PER_PAGE = 15
