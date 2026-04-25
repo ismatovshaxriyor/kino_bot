@@ -216,6 +216,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
                     btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
+                if movie.movie_code:
+                    btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
+
                 # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
                 nav_btns = await _get_part_nav_buttons(movie)
                 btns.extend(nav_btns)

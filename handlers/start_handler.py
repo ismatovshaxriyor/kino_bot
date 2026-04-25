@@ -45,6 +45,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'username': username if username else None
         })
 
+        if context.args and context.args[0].isdigit():
+            # Update message text to simulate user sending the movie code
+            update.message.text = context.args[0]
+            from handlers.common_handler import message_handler
+            return await message_handler(update, context)
+
         inline_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔎 Kino izlash", switch_inline_query_current_chat="")]
         ])

@@ -33,10 +33,15 @@ async def _answer_inline_query_safely(query, results, cache_time: int = 30) -> N
         raise
 
 
-def _to_result(movie: Movie) -> InlineQueryResultArticle:
+def _to_result(movie: Movie, bot_username: str) -> InlineQueryResultArticle:
     title = f"{movie.movie_name} ({movie.movie_year or '?'})"
     desc_rating = f"{movie.average_rating}/5" if movie.rating_count > 0 else "N/A"
     description = f"⭐ {desc_rating} • Kod: {movie.movie_code}"
+
+    share_text = (
+        f"🎬 <b>{escape(movie.movie_name)}</b> kinosini tavsiya qilaman!\n\n"
+        f"Bot orqali ko'rish: https://t.me/{bot_username}?start={movie.movie_code}"
+    )
 
     return InlineQueryResultArticle(
         id=f"mv_{movie.movie_id}",
@@ -44,7 +49,8 @@ def _to_result(movie: Movie) -> InlineQueryResultArticle:
         description=description[:256],
         thumbnail_url=INLINE_THUMB_URL if INLINE_THUMB_URL else None,
         input_message_content=InputTextMessageContent(
-            f"/kino movie_{movie.movie_code}"
+            share_text,
+            parse_mode="HTML"
         ),
     )
 
@@ -74,8 +80,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         movies = await Movie.filter(movie_name__icontains=q, parent_movie=None).limit(MAX_INLINE_RESULTS)
 
     results = []
+    bot_username = context.bot.username
     for movie in movies[:MAX_INLINE_RESULTS]:
-        r = _to_result(movie)
+        r = _to_result(movie, bot_username)
         if r:
             results.append(r)
 
@@ -149,6 +156,9 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
 
     if str(user.user_type) == "admin" or update.effective_user.id in (ADMIN_ID, MANAGER_ID):
         btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
+
+    if movie.movie_code:
+        btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", switch_inline_query=str(movie.movie_code))])
 
     # Qismlarni tekshirish (bolalar kinolar)
     child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
