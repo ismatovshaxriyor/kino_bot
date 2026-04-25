@@ -48,28 +48,17 @@ def _to_result(movie: Movie, bot_username: str):
         [InlineKeyboardButton("🤖 Bot orqali ko'rish", url=f"https://t.me/{bot_username}?start={movie.movie_code}")]
     ])
 
-    if movie.file_id:
-        return InlineQueryResultCachedVideo(
-            id=f"mv_{movie.movie_id}",
-            video_file_id=movie.file_id,
-            title=title[:80],
-            description=description[:256],
-            caption=f"🎬 <b>{escape(movie.movie_name)}</b> kinosini tavsiya qilaman!",
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
-    else:
-        return InlineQueryResultArticle(
-            id=f"mv_{movie.movie_id}",
-            title=title[:80],
-            description=description[:256],
-            thumbnail_url=INLINE_THUMB_URL if INLINE_THUMB_URL else None,
-            input_message_content=InputTextMessageContent(
-                share_text,
-                parse_mode="HTML"
-            ),
-            reply_markup=keyboard
-        )
+    return InlineQueryResultArticle(
+        id=f"mv_{movie.movie_id}",
+        title=title[:80],
+        description=description[:256],
+        thumbnail_url=INLINE_THUMB_URL if INLINE_THUMB_URL else None,
+        input_message_content=InputTextMessageContent(
+            share_text,
+            parse_mode="HTML"
+        ),
+        reply_markup=keyboard
+    )
 
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
