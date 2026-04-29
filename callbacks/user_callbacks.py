@@ -2,7 +2,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
-from urllib.parse import quote
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard, ADMIN_ID, MANAGER_ID
@@ -309,9 +308,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", callback_data=f"share_movie_{movie.movie_code}")])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -408,9 +405,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", callback_data=f"share_movie_{movie.movie_code}")])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -596,9 +591,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", callback_data=f"share_movie_{movie.movie_code}")])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -673,9 +666,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
         if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
+            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", callback_data=f"share_movie_{movie.movie_code}")])
 
         # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
         nav_btns = await _get_part_nav_buttons(movie)
@@ -695,6 +686,25 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup,
                 parse_mode="HTML"
             )
+
+    # Ulashish
+    elif data.startswith("share_movie_"):
+        movie_code = data.split("_")[2]
+        bot_username = context.bot.username
+        
+        share_text = (
+            f"Boshqa foydalanuvchilar ushbu kinoni ko'rishi uchun "
+            f"quyidagi xabarni do'stingizga yuboring (forward qiling):\n\n"
+            f"👇👇👇👇👇👇\n\n"
+            f"🎬 Sizga ajoyib kinoni tavsiya qilaman!\n\n"
+            f"🤖 Bot orqali ko'rish: https://t.me/{bot_username}?start={movie_code}"
+        )
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=share_text,
+            parse_mode="HTML"
+        )
+        await _safe_answer(query)
 
     # Noop
     elif data == "noop":

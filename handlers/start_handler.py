@@ -35,8 +35,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_chat.username
     telegram_id = update.effective_chat.id
 
-    # State ni tozalash
-    context.user_data['state'] = None
+    # Barcha statelarni to'liq tozalash
+    context.user_data.clear()
 
     try:
         user, created = await User.get_or_create(telegram_id=telegram_id, defaults={

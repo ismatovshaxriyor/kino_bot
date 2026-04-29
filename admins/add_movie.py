@@ -86,7 +86,10 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await error_notificator.notify(context, e, update)
 
-    await update.message.delete()
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
 
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -113,7 +116,10 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await error_notificator.notify(context, e, update)
 
-    await update.message.delete()
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
 
     genres = await Genre.all().order_by('name')
     genre_btns = []
@@ -162,7 +168,10 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await error_notificator.notify(context, e, update)
 
     if update.message:
-        await update.message.delete()
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
 
     _, action, data = query.data.split(":")
 
@@ -312,7 +321,10 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await error_notificator.notify(context, e, update)
 
     if update.message:
-        await update.message.delete()
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
     else:
         return
 
@@ -435,7 +447,10 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await error_notificator.notify(context, e, update)
 
     if update.message:
-        await update.message.delete()
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
     else:
         return
 
@@ -478,7 +493,10 @@ async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await error_notificator.notify(context, e, update)
 
     if update.message:
-        await update.message.delete()
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
     else:
         return
 
@@ -509,7 +527,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
 
-    video = update.message.video
+    video = update.message.video or update.message.document
 
     if not video:
         msg = await context.bot.send_message(
@@ -633,6 +651,18 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ <b>Jarayon bekor qilindi.</b>", reply_markup=admin_keyboard, parse_mode="HTML")
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def start_from_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    from handlers.start_handler import start_handler
+    await start_handler(update, context)
+    return ConversationHandler.END
+
 
 add_movie_conf_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(add_movie_callback, pattern=r"^movie:add")],
@@ -646,10 +676,13 @@ add_movie_conf_handler = ConversationHandler(
         GET_QUALITY: [CallbackQueryHandler(get_language, pattern=r"language:")],
         GET_LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_duration)],
         GET_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_description)],
-        GET_DESCRIPTION: [MessageHandler(filters.VIDEO, get_video)],
+        GET_DESCRIPTION: [MessageHandler(filters.VIDEO | filters.Document.ALL, get_video)],
         SAVE_DATA: [CallbackQueryHandler(save_data, pattern=r'movie:(confirm|reject):add')]
     },
-    fallbacks=[CommandHandler('cancel', cancel_command)],
+    fallbacks=[
+        CommandHandler('cancel', cancel_command),
+        CommandHandler('start', start_from_conv)
+    ],
     per_user=True,
     block=True
 )
