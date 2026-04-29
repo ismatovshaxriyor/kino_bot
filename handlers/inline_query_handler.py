@@ -152,7 +152,10 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
         btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
 
     if movie.movie_code:
-        btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", callback_data=f"share_movie_{movie.movie_code}")])
+        share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
+        from urllib.parse import quote
+        share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
+        btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
 
     # Qismlarni tekshirish (bolalar kinolar)
     child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
