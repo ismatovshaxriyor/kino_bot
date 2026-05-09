@@ -34,7 +34,7 @@ async def get_channel_info(bot: Bot, channel_input: str) -> dict | None:
     """
     try:
         # -100 bilan boshlanuvchi ID
-        if channel_input.startswith('-100') or (channel_input.lstrip('-').isdigit()):
+        if channel_input.startswith('-100') or (channel_input.lstrip('-').isdecimal()):
             chat_id = int(channel_input)
         else:
             # Username formatida

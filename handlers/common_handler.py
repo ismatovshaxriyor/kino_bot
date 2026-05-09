@@ -124,7 +124,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Kod orqali qidirish (state = None bo'lganda raqam yuborilsa)
         text = update.message.text.strip()
 
-        if text.isdigit():
+        if text.isdecimal():
             movie_code = int(text)
             movie = await Movie.get_or_none(movie_code=movie_code).prefetch_related('movie_genre', 'movie_country')
 

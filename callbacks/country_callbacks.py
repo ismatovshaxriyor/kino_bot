@@ -16,7 +16,7 @@ async def country_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.effective_message.reply_text("✍️ Yangi davlat nomini kiriting:")
 
-    elif data_sp[1].isdigit():
+    elif data_sp[1].isdecimal():
         country_id = data_sp[1]
         country = await Countries.get_or_none(country_id=country_id)
 

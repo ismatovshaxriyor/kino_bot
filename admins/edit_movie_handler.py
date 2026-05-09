@@ -540,12 +540,12 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if edit_field == 'edit_field_name':
             movie.movie_name = new_value
         elif edit_field == 'edit_field_year':
-            if not new_value.isdigit():
+            if not new_value.isdecimal():
                 await show_error("Yil raqam bo'lishi kerak!")
                 return WAITING_INPUT
             movie.movie_year = int(new_value)
         elif edit_field == 'edit_field_code':
-            if not new_value.isdigit():
+            if not new_value.isdecimal():
                 await show_error("Kod raqam bo'lishi kerak!")
                 return WAITING_INPUT
             # Check duplicate
@@ -555,7 +555,7 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return WAITING_INPUT
             movie.movie_code = int(new_value)
         elif edit_field == 'edit_field_duration':
-            if not new_value.isdigit():
+            if not new_value.isdecimal():
                 await show_error("Davomiylik faqat raqam bo'lishi kerak (daqiqada)!")
                 return WAITING_INPUT
             movie.movie_duration = int(new_value)
@@ -725,7 +725,7 @@ async def receive_part_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
     text = update.message.text
-    if not text.isdigit():
+    if not text.isdecimal():
         await update.message.reply_text("⚠️ Yil raqam bo'lishi kerak! Qaytadan kiriting:")
         return WAITING_PART_YEAR
 
@@ -744,7 +744,7 @@ async def receive_part_duration(update: Update, context: ContextTypes.DEFAULT_TY
     if not update.message or not update.message.text:
         return
     text = update.message.text
-    if not text.isdigit():
+    if not text.isdecimal():
         await update.message.reply_text("⚠️ Davomiylik raqam bo'lishi kerak! Qaytadan kiriting:")
         return WAITING_PART_DURATION
 

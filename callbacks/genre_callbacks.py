@@ -16,7 +16,7 @@ async def genre_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.effective_message.reply_text("✍️ Yangi janr nomini kiriting:")
 
-    elif data_sp[1].isdigit():
+    elif data_sp[1].isdecimal():
         genre_id = data_sp[1]
         genre = await Genre.get_or_none(genre_id=genre_id)
 

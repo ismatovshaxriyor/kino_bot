@@ -61,7 +61,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if not q:
         await _answer_inline_query_safely(query, [], cache_time=5)
         return
-    elif q.isdigit():
+    elif q.isdecimal():
         # code first
         exact = await Movie.get_or_none(movie_code=int(q))
         if exact:
@@ -85,7 +85,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 def _extract_movie_code(raw_arg: str) -> int | None:
     value = raw_arg.strip()
-    if value.isdigit():
+    if value.isdecimal():
         return int(value)
     m = re.match(r"^movie_(\d+)$", value)
     if m:

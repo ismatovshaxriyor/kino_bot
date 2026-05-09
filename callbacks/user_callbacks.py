@@ -501,7 +501,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Top pagination
     elif data.startswith("utop_page_"):
         parts = data.split("_")
-        if len(parts) == 3 and parts[2].isdigit():
+        if len(parts) == 3 and parts[2].isdecimal():
             filter_type = "rating"
             page = int(parts[2])
         else:

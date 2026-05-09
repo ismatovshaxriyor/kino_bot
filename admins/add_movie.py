@@ -62,7 +62,7 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     movie_code = update.message.text.strip()
 
-    if not movie_code.isdigit():
+    if not movie_code.isdecimal():
         await update.message.reply_text("⚠️ <b>Iltimos, faqat raqam kiriting.</b>", parse_mode="HTML")
         return ADD_MOVIE
 
@@ -176,7 +176,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _, action, data = query.data.split(":")
 
     if action == "genre":
-        if data.isdigit():
+        if data.isdecimal():
             data = int(data)
             genres = context.user_data.setdefault("genres", [])
             if data in genres:
@@ -264,7 +264,7 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _, action, data = query.data.split(":")
 
     if action == "country":
-        if data.isdigit():
+        if data.isdecimal():
             data = int(data)
             countries = context.user_data.setdefault("countries", [])
             if data in countries:
@@ -331,7 +331,7 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
     movie_year = update.message.text
-    if not movie_year.isdigit():
+    if not movie_year.isdecimal():
         msg = await context.bot.send_message(
             update.effective_chat.id,
             "⚠️ <b>Iltimos, yilni faqat son ko'rinishida kiriting.</b>",
@@ -457,7 +457,7 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
     movie_duration = update.message.text
-    if not movie_duration.isdigit() and movie_duration != ".":
+    if not movie_duration.isdecimal() and movie_duration != ".":
         msg = await context.bot.send_message(
             update.effective_chat.id,
             "⚠️ <b>Iltimos, faqat son yoki <code>.</code> kiriting.</b>",
@@ -616,7 +616,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_id=context.user_data['file_id'],
                 movie_name=context.user_data['movie_name'],
                 movie_year=int(context.user_data['movie_year']),
-                movie_duration=int(duration) if str(duration).isdigit() else None,
+                movie_duration=int(duration) if str(duration).isdecimal() else None,
                 movie_description=description if description != '.' else None,
                 movie_quality=context.user_data.get('quality'),
                 movie_language=context.user_data.get('language')

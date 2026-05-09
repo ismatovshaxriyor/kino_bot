@@ -16,7 +16,7 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.effective_message.reply_text("✍️ Yangi manager Telegram ID sini kiriting:")
 
-    elif data_sp[1].isdigit():
+    elif data_sp[1].isdecimal():
         manager_id = data_sp[1]
         manager = await User.get_or_none(id=manager_id)
 

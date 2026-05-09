@@ -45,7 +45,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'username': username if username else None
         })
 
-        if context.args and context.args[0].isdigit():
+        if context.args and context.args[0].isdecimal():
             from handlers.inline_query_handler import inline_movie_command_handler
             return await inline_movie_command_handler(update, context)
 
