@@ -48,7 +48,7 @@ async def add_movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text="✍️ **Kino kodini kiriting:**",
             reply_markup=ReplyKeyboardRemove(),
             parse_mode="Markdown",
-            direct=True
+            direct=True  # type: ignore
         )
 
         if msg:
@@ -95,7 +95,7 @@ async def get_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         text="🎬 <b>Yangi kino nomini kiriting:</b>",
         parse_mode="HTML",
-        direct=True
+        direct=True  # type: ignore
     )
 
     if msg:
@@ -142,7 +142,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
             reply_markup=keyboard,
             parse_mode="HTML",
-            direct=True,
+            direct=True,  # type: ignore
         )
         if msg:
             context.user_data['last_msg'] = msg.message_id
@@ -207,7 +207,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🎭 <b>Janrlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    direct=True,
+                    direct=True,  # type: ignore
                 )
                 if msg:
                     context.user_data['last_msg'] = msg.message_id
@@ -234,7 +234,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    direct=True,
+                    direct=True,  # type: ignore
                 )
                 context.user_data['last_msg'] = msg.message_id
                 return GET_GENRE
@@ -295,7 +295,7 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🌍 <b>Davlatlarni tanlang:</b>\n\nTanlanganlarini ✅ bilan belgilang.",
                     reply_markup=keyboard,
                     parse_mode="HTML",
-                    direct=True,
+                    direct=True,  # type: ignore
                 )
                 if msg:
                     context.user_data['last_msg'] = msg.message_id
@@ -305,7 +305,7 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update.effective_chat.id,
                 "📅 <b>Kino yilini kiriting:</b>\n\nMasalan: <code>2024</code>",
                 parse_mode="HTML",
-                direct=True,
+                direct=True,  # type: ignore
             )
             if msg:
                 context.user_data['last_msg'] = msg.message_id
@@ -336,7 +336,7 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.effective_chat.id,
             "⚠️ <b>Iltimos, yilni faqat son ko'rinishida kiriting.</b>",
             parse_mode="HTML",
-            direct=True,
+            direct=True,  # type: ignore
         )
         if msg:
             context.user_data['last_msg'] = msg.message_id
@@ -360,7 +360,7 @@ async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📺 <b>Kino sifatini tanlang:</b>",
         reply_markup=keyboard,
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -371,7 +371,7 @@ async def get_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    _, quantity = query.data.split(":")
+    _, quality = query.data.split(":")
 
     try:
         last_msg = context.user_data.get('last_msg')
@@ -383,7 +383,7 @@ async def get_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         await update.message.delete()
 
-    context.user_data['quatity'] = quantity
+    context.user_data['quality'] = quality
 
     language_btn = [
         [
@@ -402,7 +402,7 @@ async def get_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🗣 <b>Kino tilini tanlang:</b>",
         reply_markup=keyboard,
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -431,7 +431,7 @@ async def get_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_chat.id,
         "⏱ <b>Kino davomiyligini kiriting (minutlarda):</b>\n\nBo'sh qoldirish uchun <code>.</code> yuboring.",
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -462,7 +462,7 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.effective_chat.id,
             "⚠️ <b>Iltimos, faqat son yoki <code>.</code> kiriting.</b>",
             parse_mode="HTML",
-            direct=True,
+            direct=True,  # type: ignore
         )
         if msg:
             context.user_data['last_msg'] = msg.message_id
@@ -477,7 +477,7 @@ async def get_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_chat.id,
         "📝 <b>Kino haqida qisqacha ma'lumot kiriting:</b>\n\nBo'sh qoldirish uchun <code>.</code> yuboring.",
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -509,7 +509,7 @@ async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_chat.id,
         "🎞 <b>Endi kino faylini yuboring:</b>",
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -534,7 +534,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.effective_chat.id,
             "⚠️ <b>Iltimos, faqat video fayl yuboring.</b>",
             parse_mode="HTML",
-            direct=True,
+            direct=True,  # type: ignore
         )
         if msg:
             context.user_data['last_msg'] = msg.message_id
@@ -573,7 +573,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎭 <b>Janrlar:</b> {escape(genres_name or 'Tanlanmagan')}\n"
         f"🌍 <b>Davlatlar:</b> {escape(countries_name or 'Tanlanmagan')}\n"
         f"📅 <b>Yili:</b> {escape(str(context.user_data['movie_year']))}\n"
-        f"📺 <b>Sifati:</b> {escape(str(context.user_data['quatity']))}\n"
+        f"📺 <b>Sifati:</b> {escape(str(context.user_data.get('quality')))}\n"
         f"🗣 <b>Tili:</b> {escape(str(context.user_data['language']))}\n"
         f"⏱ <b>Davomiyligi:</b> {duration_text}\n"
         f"📝 <b>Kino haqida:</b> {description_text}\n\n"
@@ -586,7 +586,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=text,
         reply_markup=keyboard,
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
     if msg:
         context.user_data['last_msg'] = msg.message_id
@@ -618,7 +618,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 movie_year=int(context.user_data['movie_year']),
                 movie_duration=int(duration) if str(duration).isdigit() else None,
                 movie_description=description if description != '.' else None,
-                movie_quality=context.user_data.get('quatity'),
+                movie_quality=context.user_data.get('quality'),
                 movie_language=context.user_data.get('language')
             )
 

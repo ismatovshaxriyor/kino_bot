@@ -25,7 +25,7 @@ async def file_check_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Bu biroz vaqt olishi mumkin."
         ),
         parse_mode="HTML",
-        direct=True,
+        direct=True,  # type: ignore
     )
 
     # Background task ishga tushirish

@@ -580,10 +580,13 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     movie_id = context.user_data.get('edit_movie_id')
 
     if edit_field == 'edit_field_file':
-        if not update.message or not update.message.video:
+        if not update.message:
+            return
+        video = update.message.video or update.message.document
+        if not video:
             return
         # Kinoning file_id sini yangilash
-        file_id = update.message.video.file_id
+        file_id = video.file_id
         movie = await Movie.get_or_none(movie_id=movie_id)
         if not movie:
             await update.message.reply_text("❌ Kino topilmadi.")
@@ -598,9 +601,12 @@ async def receive_part_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return WAITING_INPUT
 
     try:
-        if not update.message or not update.message.video:
+        if not update.message:
             return
-        file_id = update.message.video.file_id
+        video = update.message.video or update.message.document
+        if not video:
+            return
+        file_id = video.file_id
         part_number = context.user_data.pop('add_part_number_auto', 2)
         movie = await Movie.get_or_none(movie_id=movie_id)
 
@@ -790,7 +796,7 @@ edit_movie_handler = ConversationHandler(
             CallbackQueryHandler(select_field_callback, pattern=EDIT_MENU_PATTERN),
         ],
         WAITING_INPUT: [
-            MessageHandler(filters.VIDEO, receive_part_video),
+            MessageHandler(filters.VIDEO | filters.Document.ALL, receive_part_video),
             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_new_value),
         ],
         SELECTING_PART_ACTION: [CallbackQueryHandler(select_part_action_callback)],
