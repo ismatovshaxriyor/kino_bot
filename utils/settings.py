@@ -50,5 +50,11 @@ DB_PASSWORD = _require("DB_PASSWORD")
 DB_HOST = _require("DB_HOST")
 DB_PORT = _require("DB_PORT")
 
+# Zaxira nusxa (backup) sozlamalari
+# pg_dump topilmasa SQL o'rniga JSON olinadi. Quyidagilar SQL backupni
+# kafolatlash uchun: aniq pg_dump yo'li yoki docker konteyner nomi.
+PG_DUMP_PATH = os.environ.get("PG_DUMP_PATH")  # masalan: /usr/bin/pg_dump
+DB_DOCKER_CONTAINER = os.environ.get("DB_DOCKER_CONTAINER")  # masalan: my_bot_postgres
+
 
 DATABASE_URL = f"psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

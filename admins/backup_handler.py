@@ -29,6 +29,8 @@ from utils.settings import (
     DB_PASSWORD,
     DB_HOST,
     DB_PORT,
+    PG_DUMP_PATH,
+    DB_DOCKER_CONTAINER,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,40 +38,64 @@ logger = logging.getLogger(__name__)
 # Telegram bot orqali yuborilishi mumkin bo'lgan hujjat hajmi chegarasi
 TELEGRAM_DOC_LIMIT = 50 * 1024 * 1024  # 50 MB
 
-# pg_dump ko'pincha PATH da bo'lmaydi (masalan, macOS libpq keg-only) —
-# bir nechta keng tarqalgan joylarni ham tekshiramiz.
+# pg_dump ko'pincha PATH da bo'lmaydi (masalan, macOS libpq keg-only,
+# yoki host'da postgresql-client o'rnatilmagan) — bir nechta joyni tekshiramiz.
 _PG_DUMP_CANDIDATES = (
     "/opt/homebrew/opt/libpq/bin/pg_dump",
     "/usr/local/opt/libpq/bin/pg_dump",
     "/usr/bin/pg_dump",
     "/usr/local/bin/pg_dump",
-    "/usr/lib/postgresql/15/bin/pg_dump",
+    "/usr/lib/postgresql/17/bin/pg_dump",
     "/usr/lib/postgresql/16/bin/pg_dump",
+    "/usr/lib/postgresql/15/bin/pg_dump",
 )
 
 
 def _find_pg_dump() -> str | None:
+    # 1) .env dagi aniq yo'l
+    if PG_DUMP_PATH and os.path.exists(PG_DUMP_PATH):
+        return PG_DUMP_PATH
+    # 2) PATH
     found = shutil.which("pg_dump")
     if found:
         return found
+    # 3) Keng tarqalgan joylar
     for candidate in _PG_DUMP_CANDIDATES:
         if os.path.exists(candidate):
             return candidate
     return None
 
 
+async def _run_pg_dump(cmd: list, env: dict | None, out_path: Path) -> Path | None:
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        logger.error("pg_dump xato (kod %s): %s", proc.returncode, stderr.decode(errors="replace")[:500])
+        return None
+    if not stdout.strip():
+        logger.error("pg_dump bo'sh natija qaytardi")
+        return None
+    # Siqishni alohida threadda (bloklamaslik uchun)
+    await asyncio.to_thread(_gzip_bytes, stdout, out_path)
+    return out_path
+
+
 async def _pg_dump_backup(out_path: Path) -> Path | None:
-    """pg_dump orqali SQL zaxira olib, gzip bilan siqish. Muvaffaqiyatsiz bo'lsa None."""
+    """Host'dagi pg_dump orqali SQL zaxira. Topilmasa None."""
     pg_dump = _find_pg_dump()
     if not pg_dump:
-        logger.info("pg_dump topilmadi, JSON zaxiraga o'tiladi")
         return None
 
     env = dict(os.environ)
     if DB_PASSWORD:
         env["PGPASSWORD"] = DB_PASSWORD
 
-    proc = await asyncio.create_subprocess_exec(
+    cmd = [
         pg_dump,
         "-h", str(DB_HOST),
         "-p", str(DB_PORT),
@@ -77,19 +103,34 @@ async def _pg_dump_backup(out_path: Path) -> Path | None:
         "-d", str(DB_NAME),
         "--no-owner",
         "--no-privileges",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-    )
-    stdout, stderr = await proc.communicate()
+    ]
+    return await _run_pg_dump(cmd, env, out_path)
 
-    if proc.returncode != 0:
-        logger.error("pg_dump xato (kod %s): %s", proc.returncode, stderr.decode(errors="replace")[:500])
+
+async def _pg_dump_via_docker(out_path: Path) -> Path | None:
+    """pg_dump'ni postgres konteyneri ichida ishlatish (DB_DOCKER_CONTAINER o'rnatilgan bo'lsa).
+
+    Konteyner ichidagi pg_dump versiyasi server bilan aynan mos keladi — eng ishonchli yo'l.
+    """
+    if not DB_DOCKER_CONTAINER:
+        return None
+    docker = shutil.which("docker")
+    if not docker:
+        logger.info("docker topilmadi, docker-exec pg_dump o'tkazib yuborildi")
         return None
 
-    # Siqishni alohida threadda (bloklamaslik uchun)
-    await asyncio.to_thread(_gzip_bytes, stdout, out_path)
-    return out_path
+    cmd = [docker, "exec"]
+    if DB_PASSWORD:
+        cmd += ["-e", f"PGPASSWORD={DB_PASSWORD}"]
+    cmd += [
+        DB_DOCKER_CONTAINER,
+        "pg_dump",
+        "-U", str(DB_USER),
+        "-d", str(DB_NAME),
+        "--no-owner",
+        "--no-privileges",
+    ]
+    return await _run_pg_dump(cmd, None, out_path)
 
 
 def _gzip_bytes(data: bytes, out_path: Path) -> None:
@@ -138,15 +179,25 @@ async def create_backup() -> tuple[Path, str]:
     """
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     tmp = Path(gettempdir())
-
     sql_path = tmp / f"kino_backup_{ts}.sql.gz"
+
+    # 1) Host'dagi pg_dump
     try:
-        result = await _pg_dump_backup(sql_path)
-        if result is not None:
+        if await _pg_dump_backup(sql_path) is not None:
             return sql_path, "SQL (pg_dump)"
     except Exception as e:
-        logger.error("pg_dump zaxirasida xato: %s", e)
+        logger.error("pg_dump (host) zaxirasida xato: %s", e)
 
+    # 2) Docker konteyner ichidagi pg_dump
+    try:
+        if await _pg_dump_via_docker(sql_path) is not None:
+            return sql_path, "SQL (pg_dump, docker)"
+    except Exception as e:
+        logger.error("pg_dump (docker) zaxirasida xato: %s", e)
+
+    # 3) Zaxira usul — JSON (pg_dump topilmadi)
+    logger.warning("pg_dump topilmadi — JSON zaxiraga o'tildi. SQL backup uchun "
+                   "PG_DUMP_PATH yoki DB_DOCKER_CONTAINER ni sozlang.")
     json_path = tmp / f"kino_backup_{ts}.json.gz"
     await _json_backup(json_path)
     return json_path, "JSON (zaxira usul)"
