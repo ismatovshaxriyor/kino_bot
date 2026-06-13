@@ -2,17 +2,23 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from math import ceil
-from urllib.parse import quote
+
+from tortoise.expressions import F
+from tortoise.exceptions import IntegrityError
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
-from utils import user_keyboard, ADMIN_ID, MANAGER_ID
+from utils import user_keyboard
+from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import user_registered_required
+from utils.error_notificator import error_notificator
+from utils.movie_card import (
+    build_movie_card,
+    build_parts_list_card,
+    get_child_parts,
+    movie_caption,
+)
 from handlers.history_handler import get_history_keyboard
 from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_top_title
-from utils.error_notificator import error_notificator
-
-
-MOVIES_PER_PAGE = 15
 
 
 async def _safe_answer(query, *args, **kwargs) -> bool:
@@ -26,54 +32,47 @@ async def _safe_answer(query, *args, **kwargs) -> bool:
         raise
 
 
-async def _get_part_nav_buttons(movie) -> list:
-    """Qismli kino uchun oldingi/keyingi navigatsiya tugmalarini qaytaradi"""
-    if not movie.parent_movie_id:
-        # Parent kino (container) — bolalari bormi?
-        child_count = await Movie.filter(parent_movie=movie).count()
-        if child_count > 0:
-            return [[InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{movie.movie_id}")]]
-        return []
+async def _record_history(user: User, movie: Movie) -> None:
+    """Ko'rilgan kinoni tarixga yozish (yoki vaqtini yangilash)."""
+    history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+    if not created:
+        await history.save()
 
-    parent_id = movie.parent_movie_id
-    parent = await Movie.get_or_none(movie_id=parent_id)
-    if not parent:
-        return []
 
-    # Barcha qismlarni yig'ish (parent + children)
-    all_parts = []
-    if parent.file_id:
-        all_parts.append(parent)  # parent o'zi 1-qism
-    children = await Movie.filter(parent_movie_id=parent_id).order_by('part_number')
-    all_parts.extend(children)
+async def _send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie: Movie, user: User) -> None:
+    """Bitta (qismsiz) kinoni video + karta ko'rinishida yuborish."""
+    caption, reply_markup = await build_movie_card(
+        movie,
+        user=user,
+        user_id=update.effective_user.id,
+        bot_username=context.bot.username,
+    )
+    chat_id = update.effective_chat.id
 
-    # Hozirgi kino qaysi indexda?
-    current_idx = None
-    for i, part in enumerate(all_parts):
-        if part.movie_id == movie.movie_id:
-            current_idx = i
-            break
-
-    if current_idx is None:
-        return [[InlineKeyboardButton("🔙 Qismlarga qaytish", callback_data=f"umovie_{parent_id}")]]
-
-    nav_row = []
-    # ⬅️ Oldingi qism
-    if current_idx > 0:
-        prev_part = all_parts[current_idx - 1]
-        prev_num = current_idx  # 0-indexed -> 1-indexed display
-        nav_row.append(InlineKeyboardButton(f"⬅️ {prev_num}-qism", callback_data=f"uwatch_{prev_part.movie_id}"))
-
-    # 🔙 Qismlar ro'yxati
-    nav_row.append(InlineKeyboardButton("📋 Qismlar", callback_data=f"umovie_{parent_id}"))
-
-    # ➡️ Keyingi qism
-    if current_idx < len(all_parts) - 1:
-        next_part = all_parts[current_idx + 1]
-        next_num = current_idx + 2  # 0-indexed -> 1-indexed display
-        nav_row.append(InlineKeyboardButton(f"➡️ {next_num}-qism", callback_data=f"uwatch_{next_part.movie_id}"))
-
-    return [nav_row]
+    if movie.file_id:
+        try:
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=movie.file_id,
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+        except BadRequest as e:
+            await error_notificator.notify(context, e, update)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=caption + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+    else:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=caption + "\n\n⚠️ Video fayli hali yuklanmagan.",
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
 
 
 async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 1):
@@ -188,7 +187,6 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         movies, total, total_pages = await get_movies_by_filter(filter_type, filter_value, page)
         keyboard = await get_movies_keyboard(movies, page, total_pages, filter_type, filter_value)
 
-        title = ""
         if filter_type == "genre":
             genre = await Genre.get_or_none(genre_id=int(filter_value))
             title = f"🎭 <b>{genre.name if genre else 'Janr'}</b> janridagi kinolar:"
@@ -206,243 +204,53 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Kino tanlash
     elif data.startswith("umovie_"):
         movie_id = int(data.split("_")[1])
-        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
-
-        user_id = update.effective_user.id
+        movie = await Movie.get_or_none(movie_id=movie_id)
 
         if not movie:
             await query.edit_message_text("⚠️ Kino topilmadi.")
             return
 
-        # Tarixga yozish va User olish
-        user = await User.get(telegram_id=user_id)
+        user = await User.get(telegram_id=update.effective_user.id)
+        await _record_history(user, movie)
 
-        history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
-        if not created:
-            await history.save()
-
-        # Qismlarni tekshirish (bolalar kinolar)
-        child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
-        parts_count = len(child_parts)
-
-        if parts_count > 0:
-            # Qismli kino — qismlar ro'yxatini ko'rsatish
-            all_parts = []
-            if movie.file_id:
-                all_parts.append((movie, 1, "1-qism"))
-            for part in child_parts:
-                label = f"{part.part_number}-qism"
-                all_parts.append((part, part.part_number, label))
-
-            movie_info = (
-                f"🎬 <b>{movie.movie_name}</b>\n\n"
-                f"📀 <b>Qismlar soni:</b> {len(all_parts)} ta\n\n"
-                f"👇 Qaysi qismni ko'rmoqchisiz?"
-            )
-
-            btns = []
-            row = []
-            for part_movie, num, label in all_parts:
-                row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"uwatch_{part_movie.movie_id}"))
-                if len(row) == 3:
-                    btns.append(row)
-                    row = []
-            if row:
-                btns.append(row)
-
+        # Qismli kino — qismlar ro'yxatini ko'rsatish
+        child_parts = await get_child_parts(movie)
+        if child_parts:
+            text, markup = build_parts_list_card(movie, child_parts)
             if query.message.text:
-                await query.edit_message_text(
-                    text=movie_info,
-                    reply_markup=InlineKeyboardMarkup(btns),
-                    parse_mode="HTML"
-                )
+                await query.edit_message_text(text=text, reply_markup=markup, parse_mode="HTML")
             else:
                 await query.delete_message()
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text=movie_info,
-                    reply_markup=InlineKeyboardMarkup(btns),
-                    parse_mode="HTML"
+                    text=text,
+                    reply_markup=markup,
+                    parse_mode="HTML",
                 )
             return
 
         # Qismsiz kino — to'g'ridan-to'g'ri video
-        # Janrlar ro'yxati
-        genres = await movie.movie_genre.all().order_by('name')
-        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-
-        # Davlatlar ro'yxati
-        countries = await movie.movie_country.all().order_by('name')
-        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
-
-        # Kino ma'lumotlari
-        movie_info = (
-            f"🎬 <b>{movie.movie_name}</b>\n\n"
-            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-            f"🎭 <b>Janr:</b> {genres_text}\n"
-            f"🌍 <b>Davlat:</b> {countries_text}\n"
-            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
-            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
-        )
-
-        if movie.movie_description:
-            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
-            movie_info += f"\n📝 <b>Tavsif:</b> {desc}\n"
-
-        movie_info += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
-
-        # Xabarni o'chirish
         await query.delete_message()
+        await _send_movie(update, context, movie, user)
 
-        # Tugmalar (Baholash va Admin)
-        btns = []
-
-        # Baholash
-        has_rated = await Rating.exists(user=user, movie=movie)
-        if not has_rated:
-            btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
-
-        # Admin tahrirlash
-        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
-            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
-
-        if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
-
-        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
-        nav_btns = await _get_part_nav_buttons(movie)
-        btns.extend(nav_btns)
-
-        reply_markup = InlineKeyboardMarkup(btns) if btns else None
-
-        # Video yuborish (ma'lumot bilan)
-        if movie.file_id:
-            try:
-                await context.bot.send_video(
-                    chat_id=update.effective_chat.id,
-                    video=movie.file_id,
-                    caption=movie_info,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-            except BadRequest as e:
-                await error_notificator.notify(context, e, update)
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-        else:
-             await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
-
-
-    # Kino ko'rish (Video yuborish) - Qismlarni tekshirmasdan to'g'ridan-to'g'ri
+    # Kino ko'rish (qismni tekshirmasdan to'g'ridan-to'g'ri video)
     elif data.startswith("uwatch_"):
         movie_id = int(data.split("_")[1])
-        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
-        user_id = update.effective_user.id
+        movie = await Movie.get_or_none(movie_id=movie_id)
 
         if not movie:
-            await query.answer("⚠️ Kino topilmadi.", show_alert=True)
+            await _safe_answer(query, "⚠️ Kino topilmadi.", show_alert=True)
             return
 
-        # Tarixga yozish
-        user = await User.get(telegram_id=user_id)
-        history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
-        if not created:
-            await history.save()
+        user = await User.get(telegram_id=update.effective_user.id)
+        await _record_history(user, movie)
 
-        # Janrlar ro'yxati
-        genres = await movie.movie_genre.all().order_by('name')
-        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-
-        # Davlatlar ro'yxati
-        countries = await movie.movie_country.all().order_by('name')
-        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
-
-        # Kino ma'lumotlari
-        movie_info = (
-            f"🎬 <b>{movie.movie_name}</b>\n\n"
-            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-            f"🎭 <b>Janr:</b> {genres_text}\n"
-            f"🌍 <b>Davlat:</b> {countries_text}\n"
-            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
-            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
-        )
-
-        if movie.movie_description:
-            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
-            movie_info += f"\n📝 <b>Tavsif:</b> {desc}\n"
-
-        if movie.movie_code:
-            movie_info += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
-
-        # Xabarni o'chirish (agar menyudan bosilgan bo'lsa)
         try:
             await query.delete_message()
-        except:
+        except BadRequest:
             pass
 
-        # Tugmalar (Baholash va Admin)
-        btns = []
-
-        # Baholash
-        has_rated = await Rating.exists(user=user, movie=movie)
-        if not has_rated:
-            btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
-
-        # Admin tahrirlash
-        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
-            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
-
-        if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
-
-        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
-        nav_btns = await _get_part_nav_buttons(movie)
-        btns.extend(nav_btns)
-
-        reply_markup = InlineKeyboardMarkup(btns) if btns else None
-
-        # Video yuborish
-        if movie.file_id:
-            try:
-                await context.bot.send_video(
-                    chat_id=update.effective_chat.id,
-                    video=movie.file_id,
-                    caption=movie_info,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-            except BadRequest as e:
-                await error_notificator.notify(context, e, update)
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
-        else:
-             await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
-                parse_mode="HTML",
-                reply_markup=reply_markup
-            )
+        await _send_movie(update, context, movie, user)
 
     # Ortga
     elif data == "user_back":
@@ -527,97 +335,45 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Baholash tugmasi bosilganda
     elif data.startswith("rate_movie_"):
         movie_id = int(data.split("_")[2])
+        movie = await Movie.get_or_none(movie_id=movie_id)
+
+        if not movie:
+            await _safe_answer(query, "⚠️ Kino topilmadi.", show_alert=True)
+            return
 
         btns = [
-             [
-                 InlineKeyboardButton("1 ⭐", callback_data=f"set_rating_{movie_id}_1"),
-                 InlineKeyboardButton("2 ⭐", callback_data=f"set_rating_{movie_id}_2"),
-                 InlineKeyboardButton("3 ⭐", callback_data=f"set_rating_{movie_id}_3"),
-                 InlineKeyboardButton("4 ⭐", callback_data=f"set_rating_{movie_id}_4"),
-                 InlineKeyboardButton("5 ⭐", callback_data=f"set_rating_{movie_id}_5"),
-             ],
-             [InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_rating_{movie_id}")]
+            [InlineKeyboardButton(f"{i} ⭐", callback_data=f"set_rating_{movie_id}_{i}") for i in range(1, 6)],
+            [InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_rating_{movie_id}")],
         ]
         keyboard = InlineKeyboardMarkup(btns)
 
-        # Caption borligini tekshirish
-        caption = query.message.caption_html if query.message.caption else ""
+        caption = await movie_caption(movie) + "\n\n👇 <b>Kino uchun baho bering:</b>"
 
         if query.message.caption:
-            await query.edit_message_caption(
-                caption=caption + "\n\n👇 <b>Kino uchun baho bering:</b>",
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            await query.edit_message_caption(caption=caption, reply_markup=keyboard, parse_mode="HTML")
         else:
-             await query.edit_message_text(
-                 text=query.message.text_html + "\n\n👇 <b>Kino uchun baho bering:</b>",
-                 reply_markup=keyboard,
-                 parse_mode="HTML"
-             )
+            await query.edit_message_text(text=caption, reply_markup=keyboard, parse_mode="HTML")
 
     # Baholashni bekor qilish
     elif data.startswith("cancel_rating_"):
         movie_id = int(data.split("_")[2])
         user_id = update.effective_user.id
 
-        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
+        movie = await Movie.get_or_none(movie_id=movie_id)
         user = await User.get_or_none(telegram_id=user_id)
 
         if not movie or not user:
             await _safe_answer(query, "⚠️ Xatolik yuz berdi.", show_alert=True)
             return
 
-        genres = await movie.movie_genre.all().order_by('name')
-        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-        countries = await movie.movie_country.all().order_by('name')
-        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
-
-        movie_info = (
-            f"🎬 <b>{movie.movie_name}</b>\n\n"
-            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-            f"🎭 <b>Janr:</b> {genres_text}\n"
-            f"🌍 <b>Davlat:</b> {countries_text}\n"
-            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
-            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-            f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n"
+        caption, reply_markup = await build_movie_card(
+            movie, user=user, user_id=user_id, bot_username=context.bot.username
         )
-        if movie.movie_description:
-            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
-            movie_info += f"\n📝 <b>Tavsif:</b> {desc}\n"
-        movie_info += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
-
-        btns = []
-        has_rated = await Rating.exists(user=user, movie=movie)
-        if not has_rated:
-            btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
-        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
-            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
-
-        if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
-
-        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
-        nav_btns = await _get_part_nav_buttons(movie)
-        btns.extend(nav_btns)
-
-        reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         if query.message.caption:
-            await query.edit_message_caption(
-                caption=movie_info,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
+            await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode="HTML")
         else:
-            await query.edit_message_text(
-                text=movie_info,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
+            await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode="HTML")
 
     # Bahoni saqlash
     elif data.startswith("set_rating_"):
@@ -626,7 +382,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         score = int(parts[3])
         user_id = update.effective_user.id
 
-        movie = await Movie.get_or_none(movie_id=movie_id).prefetch_related('movie_genre', 'movie_country')
+        movie = await Movie.get_or_none(movie_id=movie_id)
         user = await User.get_or_none(telegram_id=user_id)
 
         if not movie or not user:
@@ -638,63 +394,33 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
             return
 
-        await Rating.create(user=user, movie=movie, score=score)
+        try:
+            await Rating.create(user=user, movie=movie, score=score)
+        except IntegrityError:
+            # Poyga holati: exists() va create() orasida boshqa so'rov ovoz qo'ygan.
+            # UNIQUE (user, movie) cheklovi himoya qiladi — foydalanuvchiga do'stona xabar.
+            await _safe_answer(query, "⚠️ Siz allaqachon ovoz bergansiz!", show_alert=True)
+            await query.edit_message_reply_markup(reply_markup=None)
+            return
 
-        movie.total_rating_sum += score
-        movie.rating_count += 1
-        await movie.save()
+        # Atomik yangilash — bir vaqtdagi ovozlar bir-birini yo'qotmaydi
+        await Movie.filter(movie_id=movie_id).update(
+            total_rating_sum=F("total_rating_sum") + score,
+            rating_count=F("rating_count") + 1,
+        )
 
         await _safe_answer(query, f"✅ {score} ⭐ baho qo'yildi!", show_alert=True)
 
-        new_rating_text = f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)"
-
-        genres = await movie.movie_genre.all().order_by('name')
-        genres_text = ", ".join([g.name for g in genres]) if genres else "Nomalum"
-        countries = await movie.movie_country.all().order_by('name')
-        countries_text = ", ".join([c.name for c in countries]) if countries else "Nomalum"
-
-        new_caption = (
-            f"🎬 <b>{movie.movie_name}</b>\n\n"
-            f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-            f"🎭 <b>Janr:</b> {genres_text}\n"
-            f"🌍 <b>Davlat:</b> {countries_text}\n"
-            f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
-            f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-            f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-            f"{new_rating_text}\n"
+        # Yangilangan reyting bilan qayta yuklash
+        movie = await Movie.get(movie_id=movie_id)
+        caption, reply_markup = await build_movie_card(
+            movie, user=user, user_id=user_id, bot_username=context.bot.username
         )
-        if movie.movie_description:
-            desc = movie.movie_description[:300] + ('...' if len(movie.movie_description or '') > 300 else '')
-            new_caption += f"\n📝 <b>Tavsif:</b> {desc}\n"
-        new_caption += f"\n📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
-
-        btns = []
-        if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
-            btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
-
-        if movie.movie_code:
-            share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-            share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-            btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
-
-        # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
-        nav_btns = await _get_part_nav_buttons(movie)
-        btns.extend(nav_btns)
-
-        reply_markup = InlineKeyboardMarkup(btns) if btns else None
 
         if query.message.caption:
-            await query.edit_message_caption(
-                caption=new_caption,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
+            await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode="HTML")
         else:
-            await query.edit_message_text(
-                text=new_caption,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
+            await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode="HTML")
 
     # Noop
     elif data == "noop":

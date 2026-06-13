@@ -1,3 +1,4 @@
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -5,13 +6,13 @@ from datetime import date
 from math import ceil
 
 from services import ai_assistant
-from database import User, Movie, UserMovieHistory, Rating
-from utils import error_notificator, ADMIN_ID, MANAGER_ID
+from database import User, Movie, UserMovieHistory
+from utils import error_notificator
+from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import channel_subscription_required, user_registered_required
-from callbacks.user_callbacks import _get_part_nav_buttons
+from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts
 
 DAILY_LIMIT = 3
-MOVIES_PER_PAGE = 15
 
 async def can_use_ai(user: User) -> bool:
     today = date.today()
@@ -107,7 +108,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action(action="typing")
 
         try:
-            response = ai_assistant.get_movie_recommendation(user_message)
+            # AI client sinxron (requests + time.sleep) — event-loopni bloklamaslik
+            # uchun alohida threadda ishga tushiramiz.
+            response = await asyncio.to_thread(ai_assistant.get_movie_recommendation, user_message)
 
             try:
                 await context.bot.send_message(chat_id, response, parse_mode="Markdown")
@@ -124,135 +127,58 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Kod orqali qidirish (state = None bo'lganda raqam yuborilsa)
         text = update.message.text.strip()
 
-        if text.isdecimal():
-            movie_code = int(text)
-            movie = await Movie.get_or_none(movie_code=movie_code).prefetch_related('movie_genre', 'movie_country')
+        if not text.isdecimal():
+            return
 
-            if movie:
-                # Qismlarni tekshirish (bolalar kinolar)
-                child_parts = await Movie.filter(parent_movie=movie).order_by('part_number')
-                parts_count = len(child_parts)
+        movie_code = int(text)
+        movie = await Movie.get_or_none(movie_code=movie_code)
 
-                if parts_count > 0:
-                    # Qismli kino — qismlar ro'yxatini ko'rsatish
-                    # Ota-kino ham 1-qism hisoblanadi agar file_id bor bo'lsa
-                    all_parts = []
-                    if movie.file_id:
-                        all_parts.append((movie, 1, f"1-qism"))
-                    for part in child_parts:
-                        label = f"{part.part_number}-qism"
-                        all_parts.append((part, part.part_number, label))
+        if not movie:
+            await update.message.reply_text(
+                f"📭 <b>{movie_code}</b> kodli kino topilmadi.\n\n"
+                "🔄 Boshqa kod bilan urinib ko'ring.",
+                parse_mode="HTML"
+            )
+            return
 
-                    movie_info = (
-                        f"🎬 <b>{movie.movie_name}</b>\n\n"
-                        f"📀 <b>Qismlar soni:</b> {len(all_parts)} ta\n\n"
-                        f"👇 Qaysi qismni ko'rmoqchisiz?"
-                    )
+        user = await User.get(telegram_id=update.effective_user.id)
+        history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+        if not created:
+            await history.save()
 
-                    btns = []
-                    row = []
-                    for part_movie, num, label in all_parts:
-                        row.append(InlineKeyboardButton(f"▶️ {label}", callback_data=f"uwatch_{part_movie.movie_id}"))
-                        if len(row) == 3:
-                            btns.append(row)
-                            row = []
-                    if row:
-                        btns.append(row)
+        # Qismli kino — qismlar ro'yxatini ko'rsatish
+        child_parts = await get_child_parts(movie)
+        if child_parts:
+            parts_text, markup = build_parts_list_card(movie, child_parts)
+            await update.message.reply_text(parts_text, reply_markup=markup, parse_mode="HTML")
+            return
 
-                    # Tarixga yozish
-                    user_id = update.effective_user.id
-                    user = await User.get(telegram_id=user_id)
-                    history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
-                    if not created:
-                        await history.save()
+        # Qismsiz kino — video + karta
+        caption, reply_markup = await build_movie_card(
+            movie,
+            user=user,
+            user_id=update.effective_user.id,
+            bot_username=context.bot.username,
+        )
 
-                    reply_markup = InlineKeyboardMarkup(btns)
-                    await update.message.reply_text(movie_info, reply_markup=reply_markup, parse_mode="HTML")
-                    return
-
-                # Qismsiz kino — hozirgi mantiq
-                # Janrlar ro'yxati
-                genres = await movie.movie_genre.all().order_by('name')
-                genres_text = ", ".join([g.name for g in genres]) if genres else "Noma'lum"
-
-                # Davlatlar ro'yxati
-                countries = await movie.movie_country.all().order_by('name')
-                countries_text = ", ".join([c.name for c in countries]) if countries else "Noma'lum"
-
-                # Kino ma'lumotlari
-                movie_info = (
-                    f"🎬 <b>{movie.movie_name}</b>\n\n"
-                    f"📅 <b>Yil:</b> {movie.movie_year or 'Nomalum'}\n"
-                    f"🎭 <b>Janr:</b> {genres_text}\n"
-                    f"🌍 <b>Davlat:</b> {countries_text}\n"
-                    f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"
-                    f"📺 <b>Sifat:</b> {movie.movie_quality.value if movie.movie_quality else 'Nomalum'}\n"
-                    f"🗣 <b>Til:</b> {movie.movie_language.value if movie.movie_language else 'Nomalum'}\n"
-                    f"⭐ <b>Reyting:</b> {movie.average_rating}/5 ({movie.rating_count} ovoz)\n\n"
+        if movie.file_id:
+            try:
+                await context.bot.send_video(
+                    chat_id=update.effective_chat.id,
+                    video=movie.file_id,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
                 )
-
-                if movie.movie_description:
-                    movie_info += f"📝 <b>Tavsif:</b>\n{movie.movie_description[:500]}{'...' if len(movie.movie_description or '') > 500 else ''}\n\n"
-
-                movie_info += f"📥 <b>Kod:</b> <code>{movie.movie_code}</code>"
-
-                # Tarixga yozish
-                user_id = update.effective_user.id
-                user = await User.get(telegram_id=user_id)
-
-                history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
-                if not created:
-                    await history.save()
-
-                # Tugmalar (Baholash va Admin)
-                btns = []
-
-                # Baholash
-                has_rated = await Rating.exists(user=user, movie=movie)
-                if not has_rated:
-                    btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
-
-                # Admin tahrirlash
-                if str(user.user_type) == 'admin' or user_id in (ADMIN_ID, MANAGER_ID):
-                    btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")])
-
-                if movie.movie_code:
-                    share_text = f"🎬 {movie.movie_name} kinosini tavsiya qilaman!\n\nBot orqali ko'rish:"
-                    from urllib.parse import quote
-                    share_url = f"https://t.me/share/url?url=https://t.me/{context.bot.username}?start={movie.movie_code}&text={quote(share_text)}"
-                    btns.append([InlineKeyboardButton("↗️ Do'stlarga ulashish", url=share_url)])
-
-                # Qismlar navigatsiyasi (oldingi/keyingi/ro'yxat)
-                nav_btns = await _get_part_nav_buttons(movie)
-                btns.extend(nav_btns)
-
-                reply_markup = InlineKeyboardMarkup(btns) if btns else None
-
-                # Video yuborish
-                if movie.file_id:
-                    try:
-                        await context.bot.send_video(
-                            chat_id=update.effective_chat.id,
-                            video=movie.file_id,
-                            caption=movie_info,
-                            parse_mode="HTML",
-                            reply_markup=reply_markup
-                        )
-                    except BadRequest as e:
-                        await error_notificator.notify(context, e, update)
-                        await update.message.reply_text(
-                            movie_info + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
-                            parse_mode="HTML",
-                            reply_markup=reply_markup,
-                        )
-                else:
-                    await update.message.reply_text(
-                        movie_info + "\n\n⚠️ Video fayli hali yuklanmagan.",
-                        parse_mode="HTML"
-                    )
-            else:
+            except BadRequest as e:
+                await error_notificator.notify(context, e, update)
                 await update.message.reply_text(
-                    f"📭 <b>{movie_code}</b> kodli kino topilmadi.\n\n"
-                    "🔄 Boshqa kod bilan urinib ko'ring.",
-                    parse_mode="HTML"
+                    caption + "\n\n⚠️ Video fayli yaroqsiz yoki o'chirilgan.",
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
                 )
+        else:
+            await update.message.reply_text(
+                caption + "\n\n⚠️ Video fayli hali yuklanmagan.",
+                parse_mode="HTML"
+            )

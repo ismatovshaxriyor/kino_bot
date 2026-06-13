@@ -512,7 +512,7 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchi xabarini o'chirish
     try:
         await msg.delete()
-    except:
+    except Exception:
         pass
 
     async def show_error(error_text):
@@ -522,13 +522,13 @@ async def receive_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id, message_id=editor_msg_id,
                     caption=f"⚠️ {error_text}\n\nQaytadan urinib ko'ring:", parse_mode="HTML"
                 )
-            except:
+            except Exception:
                 try:
                     await context.bot.edit_message_text(
                         chat_id=chat_id, message_id=editor_msg_id,
                         text=f"⚠️ {error_text}\n\nQaytadan urinib ko'ring:", parse_mode="HTML"
                     )
-                except:
+                except Exception:
                     pass
 
     movie = await Movie.get_or_none(movie_id=movie_id)

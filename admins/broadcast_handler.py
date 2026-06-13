@@ -1,6 +1,7 @@
 import asyncio
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import Forbidden, BadRequest
+from telegram.error import Forbidden, BadRequest, RetryAfter
 from telegram.ext import (
     ConversationHandler, MessageHandler, CallbackQueryHandler,
     CommandHandler, ContextTypes, filters,
@@ -9,6 +10,8 @@ from telegram.ext import (
 from database import User
 from utils import admin_required, ADMIN_ID
 from utils.admin_btns import admin_keyboard
+
+logger = logging.getLogger(__name__)
 
 WAITING_BROADCAST, CONFIRM_BROADCAST = range(2)
 
@@ -54,22 +57,36 @@ async def receive_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _broadcast_worker(bot, from_chat_id: int, msg_id: int, status_chat_id: int, status_msg_id: int):
     """Background task: barcha userlarga xabar yuborish"""
-    users = await User.all()
-    total = len(users)
+    # Faqat ID'larni yuklaymiz (butun User obyektlari emas) — xotira tejaladi
+    user_ids = await User.all().values_list("telegram_id", flat=True)
+    total = len(user_ids)
     sent = 0
     blocked = 0
 
-    for i, user in enumerate(users):
+    for i, telegram_id in enumerate(user_ids):
         try:
             await bot.copy_message(
-                chat_id=user.telegram_id,
+                chat_id=telegram_id,
                 from_chat_id=from_chat_id,
                 message_id=msg_id,
             )
             sent += 1
+        except RetryAfter as e:
+            # Telegram flood-limit: kutib, shu userga qayta urinamiz
+            await asyncio.sleep(int(getattr(e, "retry_after", 1)) + 1)
+            try:
+                await bot.copy_message(
+                    chat_id=telegram_id,
+                    from_chat_id=from_chat_id,
+                    message_id=msg_id,
+                )
+                sent += 1
+            except Exception:
+                blocked += 1
         except (Forbidden, BadRequest):
             blocked += 1
-        except Exception:
+        except Exception as e:
+            logger.warning("Broadcast: %s ga yuborilmadi: %s", telegram_id, e)
             blocked += 1
 
         # Progress: har 50 ta userda yangilash

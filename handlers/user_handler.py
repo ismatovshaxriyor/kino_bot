@@ -5,9 +5,6 @@ from database import Genre, Movie
 from utils.decorators import channel_subscription_required, user_registered_required
 
 
-MOVIES_PER_PAGE = 15
-
-
 async def get_genre_keyboard():
     """Janrlar ro'yxati tugmalari"""
     genres = await Genre.all().order_by('name')

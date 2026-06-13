@@ -1,3 +1,6 @@
+import logging
+from datetime import time as dtime
+
 from admins import get_channels
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, InlineQueryHandler, MessageHandler, filters
 from telegram import Update
@@ -8,6 +11,17 @@ from admins import *
 from database import post_init
 from utils import BOT_TOKEN, apply_redis_patch
 
+try:
+    from zoneinfo import ZoneInfo
+    BACKUP_TZ = ZoneInfo("Asia/Tashkent")
+except Exception:  # zoneinfo/tzdata mavjud bo'lmasa, JobQueue default tz ishlatadi
+    BACKUP_TZ = None
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 apply_redis_patch()
 
@@ -36,6 +50,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar") & private_filter, get_channels))
     bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika") & private_filter, statistics_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔍 Tekshirish") & private_filter, file_check_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"💾 Zaxira nusxa") & private_filter, backup_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga") & private_filter, admin_back_handler))
 
     # User handlers - Only Private
@@ -59,6 +74,17 @@ def main():
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))
 
     bot.add_error_handler(error_handler)
+
+    # Kunlik avtomatik zaxira nusxa (bosh adminga) — har kuni 03:00 (Asia/Tashkent)
+    if bot.job_queue:
+        bot.job_queue.run_daily(
+            daily_backup_job,
+            time=dtime(hour=3, minute=0, tzinfo=BACKUP_TZ),
+            name="daily_db_backup",
+        )
+        logger.info("✅ Kunlik zaxira JobQueue rejalashtirildi (03:00)")
+    else:
+        logger.warning("⚠️ JobQueue mavjud emas (APScheduler o'rnatilmagan?) — kunlik zaxira ishlamaydi")
 
     bot.run_polling(allowed_updates=Update.ALL_TYPES)
 

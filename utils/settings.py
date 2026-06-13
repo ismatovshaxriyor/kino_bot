@@ -3,21 +3,52 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PAGE_SIZE = 40
 
+class ConfigError(RuntimeError):
+    """Muhim sozlama (.env) topilmaganda yoki noto'g'ri bo'lganda chiqariladi."""
+
+
+def _require(name: str) -> str:
+    value = os.environ.get(name)
+    if value is None or value.strip() == "":
+        raise ConfigError(
+            f"Majburiy muhit o'zgaruvchisi topilmadi: {name}. "
+            f".env faylga {name}=... qatorini qo'shing."
+        )
+    return value
+
+
+def _require_int(name: str) -> int:
+    raw = _require(name)
+    try:
+        return int(raw)
+    except ValueError:
+        raise ConfigError(f"{name} butun son bo'lishi kerak, lekin qiymat: {raw!r}")
+
+
+# Sahifalash
+PAGE_SIZE = 40            # admin kino ro'yxati
+MOVIES_PER_PAGE = 15      # user / inline ro'yxatlar
+
+# Telegram
+BOT_TOKEN = _require("BOT_TOKEN")
+ADMIN_ID = _require_int("ADMIN_ID")
+MANAGER_ID = _require_int("MANAGER_ID")
+INLINE_THUMB_URL = os.environ.get("INLINE_THUMB_URL", "https://i.postimg.cc/bY42y8qS/IMG-7403.png")
+
+# Gemini AI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID"))
-MANAGER_ID = int(os.environ.get("MANAGER_ID"))
-INLINE_THUMB_URL = os.environ.get("INLINE_THUMB_URL", "https://i.postimg.cc/bY42y8qS/IMG-7403.png")
+# Redis (worker navbati)
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost")
 
-DB_NAME = os.environ.get("DB_NAME")
-DB_USER = os.environ.get("DB_USER")
-DB_PASSWORD = os.environ.get("DB_PASSWORD")
-DB_HOST = os.environ.get("DB_HOST")
-DB_PORT = os.environ.get("DB_PORT")
+# Ma'lumotlar bazasi
+DB_NAME = _require("DB_NAME")
+DB_USER = _require("DB_USER")
+DB_PASSWORD = _require("DB_PASSWORD")
+DB_HOST = _require("DB_HOST")
+DB_PORT = _require("DB_PORT")
 
 
 DATABASE_URL = f"psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

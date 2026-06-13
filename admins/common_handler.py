@@ -105,7 +105,7 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
         try:
             manager_id = int(update.message.text)
             context.user_data['new_manager'] = manager_id
-        except:
+        except (ValueError, TypeError):
             await update.message.reply_text("Noto'g'ri formatdagi id\n\nId faqat raqamlardan iborat bo'lishi kerak", reply_markup=keyboard)
             return
 

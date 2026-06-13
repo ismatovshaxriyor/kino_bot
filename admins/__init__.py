@@ -10,3 +10,4 @@ from .edit_movie_handler import *
 from .statistics_handler import *
 from .broadcast_handler import *
 from .file_checker_handler import *
+from .backup_handler import *

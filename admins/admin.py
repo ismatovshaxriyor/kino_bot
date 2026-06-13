@@ -11,7 +11,7 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard_rows = [row[:] for row in admin_btns]
     if user_id in (ADMIN_ID, MANAGER_ID):
-        keyboard_rows.insert(3, [KeyboardButton("👤 Managerlar")])
+        keyboard_rows.insert(3, [KeyboardButton("👤 Managerlar"), KeyboardButton("💾 Zaxira nusxa")])
 
     admin_keyboard = ReplyKeyboardMarkup(
         keyboard_rows,

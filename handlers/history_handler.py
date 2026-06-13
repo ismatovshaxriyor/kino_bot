@@ -3,9 +3,8 @@ from telegram.ext import ContextTypes
 from math import ceil
 
 from database import User, UserMovieHistory
+from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import channel_subscription_required, user_registered_required
-
-MOVIES_PER_PAGE = 15
 
 async def get_history_keyboard(user_id, page: int = 1):
     """Tarix tugmalarini generatsiya qilish"""

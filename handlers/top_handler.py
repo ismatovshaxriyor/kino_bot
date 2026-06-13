@@ -5,9 +5,9 @@ from telegram.ext import ContextTypes
 from tortoise.functions import Count
 
 from database import Movie
+from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import channel_subscription_required, user_registered_required
 
-MOVIES_PER_PAGE = 15
 TOP_FILTERS = {
     "views": "Ko'rishlar bo'yicha",
     "rating": "Reyting bo'yicha",
