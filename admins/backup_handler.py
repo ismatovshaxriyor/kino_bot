@@ -296,19 +296,19 @@ async def backup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-async def daily_backup_job(context: ContextTypes.DEFAULT_TYPE):
-    """JobQueue: har kuni bosh adminga avtomatik zaxira yuborish."""
+async def scheduled_backup_job(context: ContextTypes.DEFAULT_TYPE):
+    """JobQueue: har 6 soatda bosh adminga avtomatik zaxira yuborish."""
     try:
         sent, filename = await send_backup(
-            context.bot, [ADMIN_ID], reason="Avtomatik kunlik zaxira"
+            context.bot, [ADMIN_ID], reason="Avtomatik zaxira (har 6 soat)"
         )
-        logger.info("Kunlik zaxira yuborildi (%s), qabul qiluvchilar: %s", filename, sent)
+        logger.info("Avtomatik zaxira yuborildi (%s), qabul qiluvchilar: %s", filename, sent)
     except Exception as e:
-        logger.exception("Kunlik zaxira nusxasida xato: %s", e)
+        logger.exception("Avtomatik zaxira nusxasida xato: %s", e)
         try:
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
-                text=f"🚨 <b>Kunlik zaxira nusxasi xatosi:</b>\n<code>{str(e)[:300]}</code>",
+                text=f"🚨 <b>Avtomatik zaxira nusxasi xatosi:</b>\n<code>{str(e)[:300]}</code>",
                 parse_mode="HTML",
             )
         except Exception:

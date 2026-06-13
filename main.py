@@ -1,5 +1,5 @@
 import logging
-from datetime import time as dtime
+from datetime import time as dtime, timedelta
 
 from admins import get_channels
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, InlineQueryHandler, MessageHandler, filters
@@ -75,16 +75,17 @@ def main():
 
     bot.add_error_handler(error_handler)
 
-    # Kunlik avtomatik zaxira nusxa (bosh adminga) — har kuni 03:00 (Asia/Tashkent)
+    # Avtomatik zaxira nusxa (bosh adminga) — har 6 soatda (00:00/06:00/12:00/18:00, Asia/Tashkent)
     if bot.job_queue:
-        bot.job_queue.run_daily(
-            daily_backup_job,
-            time=dtime(hour=3, minute=0, tzinfo=BACKUP_TZ),
-            name="daily_db_backup",
+        bot.job_queue.run_repeating(
+            scheduled_backup_job,
+            interval=timedelta(hours=6),
+            first=dtime(hour=0, minute=0, tzinfo=BACKUP_TZ),
+            name="db_backup_6h",
         )
-        logger.info("✅ Kunlik zaxira JobQueue rejalashtirildi (03:00)")
+        logger.info("✅ Zaxira JobQueue rejalashtirildi (har 6 soat: 00:00/06:00/12:00/18:00)")
     else:
-        logger.warning("⚠️ JobQueue mavjud emas (APScheduler o'rnatilmagan?) — kunlik zaxira ishlamaydi")
+        logger.warning("⚠️ JobQueue mavjud emas (APScheduler o'rnatilmagan?) — avtomatik zaxira ishlamaydi")
 
     bot.run_polling(allowed_updates=Update.ALL_TYPES)
 
