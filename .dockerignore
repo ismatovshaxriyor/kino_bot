@@ -24,8 +24,7 @@ env
 migrations
 
 # Kerak bo'lmagan fayllar
+# (IMG_7403.PNG bundan mustasno — start_handler.py runtime'da o'qiydi)
 docs
 *.log
-*.PNG
-*.png
 .DS_Store
