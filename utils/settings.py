@@ -34,7 +34,7 @@ MOVIES_PER_PAGE = 15      # user / inline ro'yxatlar
 BOT_TOKEN = _require("BOT_TOKEN")
 ADMIN_ID = _require_int("ADMIN_ID")
 MANAGER_ID = _require_int("MANAGER_ID")
-INLINE_THUMB_URL = os.environ.get("INLINE_THUMB_URL", "https://kommodo.ai/i/yEVngHiIe2ZZXKuwKqk1")
+INLINE_THUMB_URL = os.environ.get("INLINE_THUMB_URL", "https://i.postimg.cc/FsnbDKnM/IMG-0989.png")
 
 # Gemini AI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
