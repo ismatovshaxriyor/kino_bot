@@ -459,7 +459,7 @@ async def _restore_from_json(file_path: Path) -> tuple[bool, str]:
             collist = ", ".join(f'"{c}"' for c in cols)
 
             for row in rows:
-                placeholders = ", ".join(f"${i+1}" for i in range(len(cols)))
+                placeholders = ", ".join(["%s"] * len(cols))
                 sql = f'INSERT INTO "{t}" ({collist}) VALUES ({placeholders})'
                 values = []
                 for c in cols:
@@ -478,12 +478,12 @@ async def _restore_from_json(file_path: Path) -> tuple[bool, str]:
                 continue
             for c in rows[0].keys():
                 seq_rows = await conn.execute_query_dict(
-                    "SELECT pg_get_serial_sequence($1, $2) AS seq", [t, c]
+                    "SELECT pg_get_serial_sequence(%s, %s) AS seq", [t, c]
                 )
                 seq = seq_rows[0]["seq"] if seq_rows else None
                 if seq:
                     await conn.execute_query(
-                        f'SELECT setval($1, GREATEST(COALESCE((SELECT MAX("{c}") FROM "{t}"), 1), 1))',
+                        f'SELECT setval(%s, GREATEST(COALESCE((SELECT MAX("{c}") FROM "{t}"), 1), 1))',
                         [seq],
                     )
 
