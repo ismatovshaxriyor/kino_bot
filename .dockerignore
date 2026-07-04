@@ -1,0 +1,31 @@
+# Versiya nazorati / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Python artefaktlari
+__pycache__
+**/__pycache__
+*.py[cod]
+*$py.class
+
+# Virtual muhitlar (image ichida pip o'rnatadi)
+.venv
+venv
+ENV
+env
+
+# Maxfiy ma'lumotlar — runtime'da env_file orqali beriladi, image'ga bog'lanmaydi
+.env
+.env.*
+
+# Migratsiyalar — konteynerga volume sifatida ulanadi / serverda generatsiya qilinadi
+migrations
+
+# Kerak bo'lmagan fayllar
+docs
+*.log
+*.PNG
+*.png
+.DS_Store

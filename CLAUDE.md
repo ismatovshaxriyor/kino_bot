@@ -21,7 +21,19 @@ Both must run for the bot to deliver any outbound message (see Architecture). St
 docker-compose up -d        # Redis (localhost:6379) + Postgres
 ```
 
-Dependencies: `pip install -r requirements.txt` (includes `APScheduler` for the JobQueue). Requires a `.env` (loaded by `utils/settings.py`) with: `BOT_TOKEN`, `ADMIN_ID`, `MANAGER_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `DB_NAME`/`DB_USER`/`DB_PASSWORD`/`DB_HOST`/`DB_PORT`, and optionally `REDIS_URL` (default `redis://localhost`). `settings.py` validates the required vars at import and raises `ConfigError` with a clear message if any are missing. There is no test suite or linter configured.
+Dependencies: `pip install -r requirements.txt` (includes `APScheduler` for the JobQueue). The `.env` is loaded by `utils/settings.py`, which **validates required vars at import** (via `_require`/`_require_int`) and raises `ConfigError` with a clear message if any are missing:
+- **Required** (bot won't start without them): `BOT_TOKEN`, `ADMIN_ID`, `MANAGER_ID`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`.
+- **Optional** (read with `os.environ.get`, so a missing value is silently fine): `GEMINI_API_KEY` (AI features no-op without it), `GEMINI_MODEL` (default `gemini-2.5-flash`), `REDIS_URL` (default `redis://localhost`), `INLINE_THUMB_URL`, `PG_DUMP_PATH`, `DB_DOCKER_CONTAINER` (latter two affect backup format — see backup notes).
+
+There is no test suite or linter configured.
+
+## Deployment (Docker / EC2)
+
+Production runs **fully in Docker** — see `docs/DEPLOY_EC2.md` for the step-by-step EC2 guide. `docker-compose.yml` defines four services: `redis`, `db` (`postgres:15-alpine`), and `bot`/`worker` (both built from the root `Dockerfile`, gated behind the `app` compose **profile** so a bare `docker compose up -d` still starts infra-only for local dev, where you run `python main.py`/`worker.py` on the host). Key points:
+- Compose injects `DB_HOST=db`, `DB_PORT=5432`, `REDIS_URL=redis://redis` into the bot/worker containers, **overriding** `.env` (which still supplies all secrets via `env_file`). Postgres/Redis ports are bound to `127.0.0.1` only.
+- The image installs `postgresql-client-15` (version-matched to the server) so `pg_dump` backups work over the compose network — no `DB_DOCKER_CONTAINER` needed in Docker.
+- `migrations/` is **gitignored**, so a fresh deploy has no migration history: create the schema with `docker compose run --rm bot aerich init-db`, or restore a `.sql.gz` backup (which carries the schema). `./migrations` is mounted as a volume so server-generated migrations persist.
+- `Makefile` wraps the common ops (`make up`, `make logs`, `make init-db`, `make deploy`, `make backup`, …).
 
 ## Database migrations (aerich + Tortoise ORM)
 

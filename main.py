@@ -50,7 +50,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar") & private_filter, get_channels))
     bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika") & private_filter, statistics_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔍 Tekshirish") & private_filter, file_check_handler))
-    bot.add_handler(MessageHandler(filters.Regex(r"💾 Zaxira nusxa") & private_filter, backup_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"💾 Zaxira nusxa") & private_filter, backup_menu_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔙 Ortga") & private_filter, admin_back_handler))
 
     # User handlers - Only Private
@@ -60,6 +60,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🏆 Top kinolar") & private_filter, top_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi") & private_filter, ai_assistant_handler))
 
+    bot.add_handler(MessageHandler(filters.Document.ALL & private_filter, restore_receive_file_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, message_handler))
 
     # Callbacks
@@ -71,6 +72,10 @@ def main():
     bot.add_handler(CallbackQueryHandler(statistics_callback, pattern=r"^stats_"))
     bot.add_handler(CallbackQueryHandler(user_callback, pattern=r"^(ugenre_|uyear_|upage_|umovie_|uwatch_|user_back|noop|rate_movie_|set_rating_|cancel_rating_|uhistory_page_|utop_page_|utop_filter_|share_movie_)"))
     bot.add_handler(CallbackQueryHandler(check_subscription_callback, pattern=r"^check_subscription$"))
+    bot.add_handler(CallbackQueryHandler(backup_download_callback, pattern=r"^backup_download$"))
+    bot.add_handler(CallbackQueryHandler(backup_restore_start_callback, pattern=r"^backup_restore_start$"))
+    bot.add_handler(CallbackQueryHandler(backup_restore_cancel_callback, pattern=r"^backup_restore_cancel$"))
+    bot.add_handler(CallbackQueryHandler(restore_confirm_callback, pattern=r"^backup_restore_(confirm|reject)$"))
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))
 
     bot.add_error_handler(error_handler)
