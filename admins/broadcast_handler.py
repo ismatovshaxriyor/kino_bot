@@ -9,7 +9,7 @@ from telegram.ext import (
 
 from database import User
 from utils import admin_required, ADMIN_ID
-from utils.admin_btns import admin_keyboard
+from utils.admin_btns import get_admin_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ <b>Xabar yuborish bekor qilindi.</b>",
             parse_mode="HTML",
-            reply_markup=admin_keyboard,
+            reply_markup=get_admin_keyboard(update.effective_chat.id),
         )
 
     context.user_data.pop('broadcast_msg_id', None)

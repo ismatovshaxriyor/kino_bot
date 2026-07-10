@@ -1,23 +1,14 @@
-from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
-from utils import admin_required, admin_btns, user_keyboard
-from utils.settings import ADMIN_ID, MANAGER_ID
+from utils import admin_required, user_keyboard
+from utils.admin_btns import get_admin_keyboard
 
 
 @admin_required
 async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
-    keyboard_rows = [row[:] for row in admin_btns]
-    if user_id in (ADMIN_ID, MANAGER_ID):
-        keyboard_rows.insert(3, [KeyboardButton("👤 Managerlar"), KeyboardButton("💾 Zaxira nusxa")])
-
-    admin_keyboard = ReplyKeyboardMarkup(
-        keyboard_rows,
-        resize_keyboard=True,
-        one_time_keyboard=False
-    )
+    admin_keyboard = get_admin_keyboard(user_id)
 
     await update.message.reply_text("🔐 <b>Admin Panel</b>\n\nKerakli amalni tanlang:", reply_markup=admin_keyboard, parse_mode="HTML")
 

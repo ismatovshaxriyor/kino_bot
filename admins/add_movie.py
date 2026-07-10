@@ -1,29 +1,21 @@
 from telegram.ext import ConversationHandler, CallbackQueryHandler, MessageHandler, ContextTypes, CommandHandler, filters
-from telegram import ReplyKeyboardMarkup, Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from html import escape
 
-from utils import admin_required, admin_btns, error_notificator, ADMIN_ID, MANAGER_ID
+from utils import admin_required, error_notificator
+from utils.admin_btns import get_admin_keyboard
 from database import Movie, Genre, Countries, QualityEnum, LanguageEnum
 
 
 ADD_MOVIE, GET_CODE, GET_NAME, GET_GENRE, GET_COUNTRY, GET_YEAR, GET_QUALITY, GET_LANGUAGE, GET_DURATION, GET_DESCRIPTION, SAVE_DATA = range(11)
-admin_keyboard = ReplyKeyboardMarkup(
-        admin_btns,
-        resize_keyboard=True,
-        one_time_keyboard=False
-    )
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         user_id = update.effective_chat.id
-        keyboard_rows = [row[:] for row in admin_btns]
-        if user_id in (ADMIN_ID, MANAGER_ID):
-            keyboard_rows.insert(-1, [KeyboardButton("👤 Managerlar"), KeyboardButton("💾 Zaxira nusxa")])
-        cancel_keyboard = ReplyKeyboardMarkup(keyboard_rows, resize_keyboard=True, one_time_keyboard=False)
         await update.message.reply_text(
             "❌ <b>Kino qo'shish bekor qilindi.</b>",
-            reply_markup=cancel_keyboard,
+            reply_markup=get_admin_keyboard(user_id),
             parse_mode="HTML",
         )
     elif update.callback_query:
@@ -150,7 +142,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(
             "📭 <b>Janrlar topilmadi.</b>\n\nAvval janr qo'shing.",
-            reply_markup=admin_keyboard,
+            reply_markup=get_admin_keyboard(update.effective_chat.id),
             parse_mode="HTML",
         )
         return ConversationHandler.END
@@ -241,7 +233,7 @@ async def get_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.message.reply_text(
                     "📭 <b>Davlatlar topilmadi.</b>\n\nAvval davlat qo'shing.",
-                    reply_markup=admin_keyboard,
+                    reply_markup=get_admin_keyboard(update.effective_chat.id),
                     parse_mode="HTML",
                 )
                 return ConversationHandler.END
@@ -635,7 +627,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(
                 f"✅ <b>{escape(movie.movie_name)}</b> muvaffaqiyatli bazaga qo'shildi!",
                 parse_mode="HTML",
-                reply_markup=admin_keyboard,
+                reply_markup=get_admin_keyboard(update.effective_chat.id),
             )
 
             context.user_data.clear()
@@ -646,15 +638,13 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await error_notificator.notify(context, e, update)
 
     elif action == 'reject':
-        await query.message.reply_text("❌ <b>Jarayon bekor qilindi.</b>", reply_markup=admin_keyboard, parse_mode="HTML")
+        await query.message.reply_text(
+            "❌ <b>Jarayon bekor qilindi.</b>",
+            reply_markup=get_admin_keyboard(update.effective_chat.id),
+            parse_mode="HTML",
+        )
         context.user_data.clear()
         return ConversationHandler.END
-
-
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ <b>Jarayon bekor qilindi.</b>", reply_markup=admin_keyboard, parse_mode="HTML")
-    context.user_data.clear()
-    return ConversationHandler.END
 
 
 async def start_from_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
