@@ -4,5 +4,6 @@ from .genre_model import *
 from .movie_model import *
 from .user_model import *
 from .rating_model import *
+from .backup_settings_model import *
 
 from .init_db import *

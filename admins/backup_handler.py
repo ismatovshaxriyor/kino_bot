@@ -19,7 +19,7 @@ import logging
 import os
 import re
 import shutil
-from datetime import datetime
+from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
 from tempfile import gettempdir
 
@@ -27,6 +27,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
+from database import BackupSettings
 from utils.settings import (
     ADMIN_ID,
     MANAGER_ID,
@@ -40,6 +41,16 @@ from utils.settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    from zoneinfo import ZoneInfo
+    BACKUP_TZ = ZoneInfo("Asia/Tashkent")
+except Exception:  # zoneinfo/tzdata mavjud bo'lmasa, JobQueue default tz ishlatadi
+    BACKUP_TZ = None
+
+# Ruxsat etilgan avtomatik zaxira intervallari (soat)
+ALLOWED_BACKUP_INTERVALS = (6, 12, 24)
+BACKUP_JOB_NAME = "db_backup_scheduled"
 
 # Telegram bot orqali yuborilishi mumkin bo'lgan hujjat hajmi chegarasi
 TELEGRAM_DOC_LIMIT = 50 * 1024 * 1024  # 50 MB
@@ -281,6 +292,7 @@ async def backup_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("📤 Backup olish", callback_data="backup_download")],
         [InlineKeyboardButton("📥 Backup tiklash", callback_data="backup_restore_start")],
+        [InlineKeyboardButton("⚙️ Avtomatik zaxira sozlamalari", callback_data="backup_settings")],
     ])
 
     await update.message.reply_text(
@@ -745,10 +757,11 @@ async def restore_confirm_callback(update: Update, context: ContextTypes.DEFAULT
 
 
 async def scheduled_backup_job(context: ContextTypes.DEFAULT_TYPE):
-    """JobQueue: har 6 soatda bosh adminga avtomatik zaxira yuborish."""
+    """JobQueue: sozlangan intervalda bosh adminga avtomatik zaxira yuborish."""
+    settings = await BackupSettings.get_settings()
     try:
         sent, filename = await send_backup(
-            context.bot, [ADMIN_ID], reason="Avtomatik zaxira (har 6 soat)"
+            context.bot, [ADMIN_ID], reason=f"Avtomatik zaxira (har {settings.interval_hours} soat)"
         )
         logger.info("Avtomatik zaxira yuborildi (%s), qabul qiluvchilar: %s", filename, sent)
     except Exception as e:
@@ -761,3 +774,101 @@ async def scheduled_backup_job(context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception:
             pass
+
+
+async def reschedule_backup_job(job_queue) -> None:
+    """DB dagi BackupSettings'ga qarab avtomatik zaxira job'ini qayta ro'yxatdan o'tkazish.
+
+    Har doim avval eski job'ni olib tashlaydi, keyin ``enabled`` bo'lsa qayta qo'shadi —
+    shu bilan yoqish/o'chirish va interval o'zgarishi zudlik bilan kuchga kiradi
+    (bot qayta ishga tushirilishini kutmasdan).
+    """
+    for job in job_queue.get_jobs_by_name(BACKUP_JOB_NAME):
+        job.schedule_removal()
+
+    settings = await BackupSettings.get_settings()
+    if not settings.enabled:
+        logger.info("Avtomatik zaxira o'chirilgan (sozlamalarda)")
+        return
+
+    # first har doim 00:00 — interval 24ning bo'luvchisi (6/12/24) bo'lgani uchun
+    # bu nuqtadan boshlab takrorlanishi to'g'ri kesim beradi (masalan 00/12 yoki 00/06/12/18).
+    job_queue.run_repeating(
+        scheduled_backup_job,
+        interval=timedelta(hours=settings.interval_hours),
+        first=dtime(hour=0, minute=0, tzinfo=BACKUP_TZ),
+        name=BACKUP_JOB_NAME,
+    )
+    logger.info("✅ Avtomatik zaxira rejalashtirildi: har %s soat", settings.interval_hours)
+
+
+def _backup_settings_text(settings: BackupSettings) -> str:
+    status = "🟢 Yoqilgan" if settings.enabled else "🔴 O'chirilgan"
+    return (
+        "⚙️ <b>Avtomatik zaxira sozlamalari</b>\n\n"
+        f"Holati: {status}\n"
+        f"Interval: har <b>{settings.interval_hours}</b> soatda"
+    )
+
+
+def _backup_settings_keyboard(settings: BackupSettings) -> InlineKeyboardMarkup:
+    toggle_text = "🔴 O'chirish" if settings.enabled else "🟢 Yoqish"
+
+    interval_row = [
+        InlineKeyboardButton(
+            f"✅ {h}s" if h == settings.interval_hours else f"{h}s",
+            callback_data=f"backup_settings_interval_{h}",
+        )
+        for h in ALLOWED_BACKUP_INTERVALS
+    ]
+
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(toggle_text, callback_data="backup_settings_toggle")],
+        interval_row,
+        [InlineKeyboardButton("⬅️ Ortga", callback_data="backup_settings_back")],
+    ])
+
+
+async def backup_settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """⚙️ Avtomatik zaxira sozlamalari — menyu, yoqish/o'chirish va interval tanlash."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    if user_id not in (ADMIN_ID, MANAGER_ID):
+        return
+
+    data = query.data
+
+    if data == "backup_settings_back":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 Backup olish", callback_data="backup_download")],
+            [InlineKeyboardButton("📥 Backup tiklash", callback_data="backup_restore_start")],
+            [InlineKeyboardButton("⚙️ Avtomatik zaxira sozlamalari", callback_data="backup_settings")],
+        ])
+        await query.edit_message_text(
+            "💾 <b>Zaxira nusxa boshqaruvi</b>\n\nKerakli amalni tanlang:",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+        return
+
+    settings = await BackupSettings.get_settings()
+
+    if data == "backup_settings_toggle":
+        settings.enabled = not settings.enabled
+        await settings.save()
+        await reschedule_backup_job(context.job_queue)
+
+    elif data.startswith("backup_settings_interval_"):
+        hours = int(data.removeprefix("backup_settings_interval_"))
+        if hours in ALLOWED_BACKUP_INTERVALS:
+            settings.interval_hours = hours
+            await settings.save()
+            await reschedule_backup_job(context.job_queue)
+
+    await query.edit_message_text(
+        _backup_settings_text(settings),
+        reply_markup=_backup_settings_keyboard(settings),
+        parse_mode="HTML",
+    )

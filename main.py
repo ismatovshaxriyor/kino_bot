@@ -1,5 +1,4 @@
 import logging
-from datetime import time as dtime, timedelta
 
 from admins import get_channels
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, InlineQueryHandler, MessageHandler, filters
@@ -11,12 +10,6 @@ from admins import *
 from database import post_init
 from utils import BOT_TOKEN, apply_redis_patch
 
-try:
-    from zoneinfo import ZoneInfo
-    BACKUP_TZ = ZoneInfo("Asia/Tashkent")
-except Exception:  # zoneinfo/tzdata mavjud bo'lmasa, JobQueue default tz ishlatadi
-    BACKUP_TZ = None
-
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -25,8 +18,15 @@ logger = logging.getLogger(__name__)
 
 apply_redis_patch()
 
+
+async def _post_init(application):
+    await post_init(application)
+    if application.job_queue:
+        await reschedule_backup_job(application.job_queue)
+
+
 def main():
-    bot = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    bot = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
     bot.add_handler(CommandHandler('start', start_handler))
     bot.add_handler(CommandHandler("kino", inline_movie_command_handler))
@@ -76,20 +76,12 @@ def main():
     bot.add_handler(CallbackQueryHandler(backup_restore_start_callback, pattern=r"^backup_restore_start$"))
     bot.add_handler(CallbackQueryHandler(backup_restore_cancel_callback, pattern=r"^backup_restore_cancel$"))
     bot.add_handler(CallbackQueryHandler(restore_confirm_callback, pattern=r"^backup_restore_(confirm|reject)$"))
+    bot.add_handler(CallbackQueryHandler(backup_settings_callback, pattern=r"^backup_settings"))
     bot.add_handler(CallbackQueryHandler(confirm_callback, pattern=r"^(confirm_|reject)"))
 
     bot.add_error_handler(error_handler)
 
-    # Avtomatik zaxira nusxa (bosh adminga) — har 6 soatda (00:00/06:00/12:00/18:00, Asia/Tashkent)
-    if bot.job_queue:
-        bot.job_queue.run_repeating(
-            scheduled_backup_job,
-            interval=timedelta(hours=6),
-            first=dtime(hour=0, minute=0, tzinfo=BACKUP_TZ),
-            name="db_backup_6h",
-        )
-        logger.info("✅ Zaxira JobQueue rejalashtirildi (har 6 soat: 00:00/06:00/12:00/18:00)")
-    else:
+    if not bot.job_queue:
         logger.warning("⚠️ JobQueue mavjud emas (APScheduler o'rnatilmagan?) — avtomatik zaxira ishlamaydi")
 
     bot.run_polling(allowed_updates=Update.ALL_TYPES)
