@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from database import Movie, Genre, Countries
-from admins import get_movies_keyboard
+from admins import get_movies_keyboard, send_movie_chart
 from utils import get_movies_page, ADMIN_ID, MANAGER_ID
 
 
@@ -44,24 +44,7 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         btns = [
              [InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")],
-             [InlineKeyboardButton("🗑 O'chirish", callback_data=f"delete_movie_{movie.movie_id}")],
-             [InlineKeyboardButton("🔙 Ortga", callback_data=f"movie_page_{context.user_data.get('MOVIE_PAGE', 1)}")]
-        ]
-
-        # O'chirish logikasi hali edit_movie_handler da bormi?
-        # edit_movie_handler da o'chirish tugmasi tahrirlash menyusi ichida edi.
-        # Bu yerda to'g'ridan-to'g'ri DELETE bosilsa nima bo'ladi?
-        # edit_movie_handler da delete logikasi bormi? Tekshirish kerak.
-        # Hozircha Tahrirlash tugmasi yetarli. Delete ni tahrirlash menyusiga kiritganmiz.
-        # Lekin mayli, bu yerda ham tursa ziyon qilmaydi, faqat handler bo'lishi kerak.
-        # delete_movie_ patterni bormi? edit_movie_handler da bormi?
-        # edit_movie_handler pattern: ^edit_movie_\d+$ (ENTRY POINT)
-        # ^delete_movie_ pattern yo'q main.py da.
-        # Demak o'chirish tugmasini bu yerga qo'ysak ishlamaydi (handler yo'q).
-        # Shuning uchun faqat Tahrirlash va Ortga tugmasini qo'yaman.
-
-        btns = [
-             [InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"edit_movie_{movie.movie_id}")],
+             [InlineKeyboardButton("📈 Ko'rishlar grafigi", callback_data=f"movie_chart_{movie.movie_id}")],
              [InlineKeyboardButton("🔙 Ortga", callback_data=f"movie_page_{context.user_data.get('MOVIE_PAGE', 1)}")]
         ]
 
@@ -80,6 +63,16 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  parse_mode="HTML",
                  reply_markup=InlineKeyboardMarkup(btns)
              )
+        return
+
+    # movie_chart_{id} - Ko'rishlar grafigi
+    if len(parts) == 3 and parts[1] == "chart":
+        movie_id = int(parts[2])
+        movie = await Movie.get_or_none(movie_id=movie_id)
+        if not movie:
+            await query.answer("⚠️ Kino topilmadi.", show_alert=True)
+            return
+        await send_movie_chart(update, context, movie)
         return
 
     # movie_page_{page} - Pagination
