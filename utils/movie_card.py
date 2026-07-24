@@ -142,8 +142,13 @@ async def build_movie_card(movie: Movie, *, user, user_id: int, bot_username: st
     return caption, (InlineKeyboardMarkup(btns) if btns else None)
 
 
-def build_parts_list_card(movie: Movie, child_parts: list[Movie]):
-    """Qismli kino uchun (text, reply_markup) — qism tanlash ro'yxati."""
+def build_parts_list_card(movie: Movie, child_parts: list[Movie], *, is_admin: bool = False):
+    """Qismli kino uchun (text, reply_markup) — qism tanlash ro'yxati.
+
+    ``is_admin`` bo'lsa, oxiriga admin/manager uchun "➕ Qism qo'shish" tugmasi
+    qo'shiladi — bu kino qo'shish oqimini (edit_movie_handler) to'g'ridan-to'g'ri
+    videoni so'rash bosqichidan boshlab ishga tushiradi.
+    """
     all_parts = []
     if movie.file_id:
         all_parts.append((movie, "1-qism"))
@@ -164,5 +169,8 @@ def build_parts_list_card(movie: Movie, child_parts: list[Movie]):
             row = []
     if row:
         rows.append(row)
+
+    if is_admin:
+        rows.append([InlineKeyboardButton("➕ Qism qo'shish", callback_data=f"add_part_direct_{movie.movie_id}")])
 
     return text, InlineKeyboardMarkup(rows)

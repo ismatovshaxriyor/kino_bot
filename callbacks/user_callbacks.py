@@ -15,6 +15,7 @@ from utils.movie_card import (
     build_movie_card,
     build_parts_list_card,
     get_child_parts,
+    is_privileged,
     movie_caption,
 )
 from handlers.history_handler import get_history_keyboard
@@ -211,12 +212,16 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user = await User.get(telegram_id=update.effective_user.id)
-        await _record_history(user, movie)
 
-        # Qismli kino — qismlar ro'yxatini ko'rsatish
+        # Qismli kino — qismlar ro'yxatini ko'rsatish. Bu bosqichda hali hech
+        # narsa tomosha qilinmagani uchun tarixga (UserMovieHistory) yozilmaydi —
+        # aks holda faqat ro'yxatni ochish ham "ko'rish" sifatida hisoblanib,
+        # statistika/grafiklarni buzib yuboradi.
         child_parts = await get_child_parts(movie)
         if child_parts:
-            text, markup = build_parts_list_card(movie, child_parts)
+            text, markup = build_parts_list_card(
+                movie, child_parts, is_admin=is_privileged(user, update.effective_user.id)
+            )
             if query.message.text:
                 await query.edit_message_text(text=text, reply_markup=markup, parse_mode="HTML")
             else:
@@ -230,6 +235,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Qismsiz kino — to'g'ridan-to'g'ri video
+        await _record_history(user, movie)
         await query.delete_message()
         await _send_movie(update, context, movie, user)
 

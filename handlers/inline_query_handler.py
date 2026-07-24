@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes
 from database import Movie, User, UserMovieHistory
 from utils import INLINE_THUMB_URL
 from utils.decorators import channel_subscription_required, user_registered_required
-from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts
+from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged
 
 
 MAX_INLINE_RESULTS = 15
@@ -111,18 +111,24 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
         return
 
     user = await User.get(telegram_id=update.effective_user.id)
-    history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
-    if not created:
-        await history.save()
 
-    # Qismli kino — qismlar ro'yxatini ko'rsatish
+    # Qismli kino — qismlar ro'yxatini ko'rsatish. Bu bosqichda hali hech narsa
+    # tomosha qilinmagani uchun tarixga (UserMovieHistory) yozilmaydi — aks holda
+    # faqat ro'yxatni ochish ham "ko'rish" sifatida hisoblanib, statistika/
+    # grafiklarni buzib yuboradi.
     child_parts = await get_child_parts(movie)
     if child_parts:
-        parts_text, markup = build_parts_list_card(movie, child_parts)
+        parts_text, markup = build_parts_list_card(
+            movie, child_parts, is_admin=is_privileged(user, update.effective_user.id)
+        )
         await update.message.reply_text(parts_text, reply_markup=markup, parse_mode="HTML")
         return
 
     # Qismsiz kino — video + karta
+    history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
+    if not created:
+        await history.save()
+
     caption, reply_markup = await build_movie_card(
         movie,
         user=user,

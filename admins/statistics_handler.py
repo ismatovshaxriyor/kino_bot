@@ -131,13 +131,17 @@ async def _rating_text() -> str:
 
 
 async def _top_text() -> str:
-    # Ko'rilish bo'yicha top
+    # Ko'rilish bo'yicha top (qismlarning ko'rishlari ota-kino nomiga jamlanadi —
+    # har bir qism alohida Movie qatori bo'lgani uchun, aks holda bitta kino
+    # bir nechta alohida qatorga bo'linib ketadi)
     view_map = {}
-    histories = await UserMovieHistory.all().prefetch_related("movie")
+    histories = await UserMovieHistory.all().prefetch_related("movie", "movie__parent_movie")
     for item in histories:
-        movie_id = item.movie.movie_id
+        parent = item.movie.parent_movie
+        canonical = parent if parent else item.movie
+        movie_id = canonical.movie_id
         if movie_id not in view_map:
-            view_map[movie_id] = [item.movie, 0]
+            view_map[movie_id] = [canonical, 0]
         view_map[movie_id][1] += 1
     top_viewed = sorted(view_map.values(), key=lambda x: x[1], reverse=True)[:5]
     viewed_text = (
@@ -173,7 +177,9 @@ async def _chart_data(period: str) -> dict:
 
     if period == "today":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        buckets = 24
+        # Hali kelmagan soatlarni "0 ko'rish" sifatida ko'rsatmaslik uchun —
+        # faqat joriy soatgacha bo'lgan qismni chizamiz.
+        buckets = now.hour + 1
         labels = [f"{h:02d}" for h in range(buckets)]
     elif period == "week":
         start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -184,7 +190,7 @@ async def _chart_data(period: str) -> dict:
         buckets = 30
         labels = [(start + timedelta(days=i)).strftime("%d.%m") for i in range(buckets)]
 
-    history = await UserMovieHistory.filter(viewed_at__gte=start).prefetch_related("movie")
+    history = await UserMovieHistory.filter(viewed_at__gte=start).prefetch_related("movie", "movie__parent_movie")
 
     counts = [0] * buckets
     view_map: dict[int, list] = {}
@@ -197,10 +203,16 @@ async def _chart_data(period: str) -> dict:
         if 0 <= idx < buckets:
             counts[idx] += 1
 
-        movie_id = h.movie.movie_id
-        if movie_id not in view_map:
-            view_map[movie_id] = [h.movie.movie_name, 0]
-        view_map[movie_id][1] += 1
+        # Qismli kino bo'lsa — ko'rishni ota-kino nomiga jamlaymiz (har bir qism
+        # alohida Movie qatori bo'lgani uchun, aks holda bitta kino bir nechta
+        # alohida ustunda ko'rinib qoladi).
+        parent = h.movie.parent_movie
+        canonical_id = parent.movie_id if parent else h.movie.movie_id
+        canonical_name = parent.movie_name if parent else h.movie.movie_name
+
+        if canonical_id not in view_map:
+            view_map[canonical_id] = [canonical_name, 0]
+        view_map[canonical_id][1] += 1
 
     top_movies = sorted(view_map.values(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -293,8 +305,10 @@ def _render_stats_chart(data: dict, period: str) -> Path:
     ax2.spines["bottom"].set_color(BASELINE)
 
     out_path = Path(gettempdir()) / f"kino_stats_{period}_{datetime.now():%Y%m%d_%H%M%S}.png"
-    canvas = FigureCanvasAgg(fig)
-    canvas.print_png(out_path)
+    FigureCanvasAgg(fig)
+    # bbox_inches="tight" — uzun kino nomlari (y-o'qi yorliqlari) chegaradan
+    # tashqariga chiqib qolsa ham kesilib qolmasligi uchun rasm ularga moslab kengaytiriladi.
+    fig.savefig(out_path, facecolor=SURFACE, bbox_inches="tight")
     return out_path
 
 
@@ -302,12 +316,21 @@ MOVIE_CHART_DAYS = 30
 
 
 async def _movie_chart_data(movie_id: int, days: int = MOVIE_CHART_DAYS) -> dict:
-    """Bitta kino uchun oxirgi N kunlik kunlik ko'rishlar sonini yig'ish."""
+    """Bitta kino uchun oxirgi N kunlik kunlik ko'rishlar sonini yig'ish.
+
+    Qismli kino bo'lsa, barcha qismlarning ko'rishlari ham shu kino hisobiga
+    qo'shiladi — chunki har bir qism alohida ``Movie`` qatori sifatida saqlanadi
+    va tomosha tarixi aynan o'sha qism ID'siga yoziladi (ota-kino konteynerga
+    aylangach o'z video-tomosha yozuviga umuman ega bo'lmaydi).
+    """
     now = datetime.now()
     start = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
     labels = [(start + timedelta(days=i)).strftime("%d.%m") for i in range(days)]
 
-    history = await UserMovieHistory.filter(movie_id=movie_id, viewed_at__gte=start)
+    part_ids = await Movie.filter(parent_movie_id=movie_id).values_list("movie_id", flat=True)
+    movie_ids = [movie_id, *part_ids]
+
+    history = await UserMovieHistory.filter(movie_id__in=movie_ids, viewed_at__gte=start)
 
     counts = [0] * days
     unique_users = set()
@@ -322,6 +345,7 @@ async def _movie_chart_data(movie_id: int, days: int = MOVIE_CHART_DAYS) -> dict
         "counts": counts,
         "total_views": len(history),
         "unique_viewers": len(unique_users),
+        "has_parts": bool(part_ids),
     }
 
 
@@ -369,8 +393,9 @@ def _render_movie_chart(movie_name: str, data: dict) -> Path:
     ax.set_ylim(bottom=0)
 
     out_path = Path(gettempdir()) / f"kino_movie_chart_{datetime.now():%Y%m%d_%H%M%S}.png"
-    canvas = FigureCanvasAgg(fig)
-    canvas.print_png(out_path)
+    FigureCanvasAgg(fig)
+    # bbox_inches="tight" — uzun kino nomi sarlavhaga sig'masa ham kesilib qolmasligi uchun.
+    fig.savefig(out_path, facecolor=CHART_SURFACE, bbox_inches="tight")
     return out_path
 
 
@@ -389,8 +414,9 @@ async def send_movie_chart(update: Update, context: ContextTypes.DEFAULT_TYPE, m
         data = await _movie_chart_data(movie.movie_id)
         out_path = await asyncio.to_thread(_render_movie_chart, movie.movie_name, data)
 
+        parts_note = " (barcha qismlar bilan)" if data["has_parts"] else ""
         caption = (
-            f"📈 <b>{movie.movie_name}</b> — kunlik ko'rishlar (oxirgi {MOVIE_CHART_DAYS} kun)\n\n"
+            f"📈 <b>{movie.movie_name}</b> — kunlik ko'rishlar (oxirgi {MOVIE_CHART_DAYS} kun){parts_note}\n\n"
             f"▶️ Jami ko'rishlar: <b>{data['total_views']}</b>\n"
             f"👤 Noyob foydalanuvchilar: <b>{data['unique_viewers']}</b>"
         )

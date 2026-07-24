@@ -62,6 +62,68 @@ def _build_country_keyboard(countries: list[Countries], selected_ids: list[int])
     rows.append([InlineKeyboardButton("🔙 Ortga", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(rows)
 
+async def _prepare_add_part(movie_id: int, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Qism qo'shishga tayyorgarlik: kerak bo'lsa birinchi qismga avto-konvert qiladi,
+    keyingi qism raqamini hisoblaydi va video kutish bosqichi uchun promt matnini qaytaradi.
+    """
+    movie = await Movie.get_or_none(movie_id=movie_id)
+    child_parts = await Movie.filter(parent_movie_id=movie_id).order_by('part_number')
+
+    if not child_parts and movie and movie.file_id:
+        # Birinchi qism qo'shilmoqda — avto-konvert
+        # Ota-kinoning videosi 1-qism bo'ladi
+        new_part1 = await Movie.create(
+            movie_name=movie.movie_name,
+            file_id=movie.file_id,
+            parent_movie=movie,
+            part_number=1,
+            movie_year=movie.movie_year,
+            movie_duration=movie.movie_duration,
+            movie_description=movie.movie_description,
+            movie_quality=movie.movie_quality,
+            movie_language=movie.movie_language,
+        )
+        # M2M fieldlarni nusxalash
+        await new_part1.movie_genre.add(*await movie.movie_genre.all())
+        await new_part1.movie_country.add(*await movie.movie_country.all())
+
+        # Ota-kinoning file_id ni tozalash (container bo'ladi)
+        movie.file_id = None
+        await movie.save()
+        context.user_data['add_part_number_auto'] = 2
+    else:
+        # Keyingi qism raqamini hisoblash
+        max_part = max([p.part_number for p in child_parts], default=0)
+        context.user_data['add_part_number_auto'] = max_part + 1
+
+    context.user_data['edit_field'] = 'add_part_file'
+    next_num = context.user_data['add_part_number_auto']
+    return (
+        f"🎬 <b>{next_num}-qism uchun videoni yuboring:</b>\n\n"
+        "(Video forward qiling yoki to'g'ridan-to'g'ri yuboring)\n\n"
+        "Bekor qilish uchun /cancel bosing"
+    )
+
+
+@admin_required
+async def start_add_part_direct(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Qismlar ro'yxati kartasidagi "➕ Qism qo'shish" tugmasi — to'g'ridan-to'g'ri
+    kino tahrirlash menyusiga kirmasdan, video so'rash bosqichidan boshlaydi.
+    """
+    query = update.callback_query
+    await query.answer()
+
+    movie_id = int(query.data.removeprefix("add_part_direct_"))
+    context.user_data['edit_movie_id'] = movie_id
+    context.user_data['state'] = 'EDIT_MOVIE'
+    context.user_data['editor_msg_id'] = query.message.message_id
+    context.user_data['editor_is_caption'] = bool(query.message.caption)
+
+    prompt = await _prepare_add_part(movie_id, context)
+    await _edit_message(query, prompt)
+    return WAITING_INPUT
+
+
 @admin_required
 async def start_edit_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie_id: int = None):
     """Kinoni tahrirlashni boshlash"""
@@ -370,44 +432,8 @@ async def select_field_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     if data == "add_part":
         movie_id = context.user_data.get('edit_movie_id')
-        movie = await Movie.get_or_none(movie_id=movie_id)
-        child_parts = await Movie.filter(parent_movie_id=movie_id).order_by('part_number')
-
-        if not child_parts and movie and movie.file_id:
-            # Birinchi qism qo'shilmoqda — avto-konvert
-            # Ota-kinoning videosi 1-qism bo'ladi
-            new_part1 = await Movie.create(
-                movie_name=movie.movie_name,
-                file_id=movie.file_id,
-                parent_movie=movie,
-                part_number=1,
-                movie_year=movie.movie_year,
-                movie_duration=movie.movie_duration,
-                movie_description=movie.movie_description,
-                movie_quality=movie.movie_quality,
-                movie_language=movie.movie_language,
-            )
-            # M2M fieldlarni nusxalash
-            await new_part1.movie_genre.add(*await movie.movie_genre.all())
-            await new_part1.movie_country.add(*await movie.movie_country.all())
-
-            # Ota-kinoning file_id ni tozalash (container bo'ladi)
-            movie.file_id = None
-            await movie.save()
-            context.user_data['add_part_number_auto'] = 2
-        else:
-            # Keyingi qism raqamini hisoblash
-            max_part = max([p.part_number for p in child_parts], default=0)
-            context.user_data['add_part_number_auto'] = max_part + 1
-
-        context.user_data['edit_field'] = 'add_part_file'
-        next_num = context.user_data['add_part_number_auto']
-        await _edit_message(
-            query,
-            f"🎬 <b>{next_num}-qism uchun videoni yuboring:</b>\n\n"
-            "(Video forward qiling yoki to'g'ridan-to'g'ri yuboring)\n\n"
-            "Bekor qilish uchun /cancel bosing"
-        )
+        prompt = await _prepare_add_part(movie_id, context)
+        await _edit_message(query, prompt)
         return WAITING_INPUT
 
     if data.startswith("delete_part_"):
@@ -789,7 +815,10 @@ async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 edit_movie_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$")],
+    entry_points=[
+        CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$"),
+        CallbackQueryHandler(start_add_part_direct, pattern=r"^add_part_direct_\d+$"),
+    ],
     states={
         SELECTING_ACTION: [
             CallbackQueryHandler(start_edit_movie, pattern=r"^edit_movie_\d+$"),
