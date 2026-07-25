@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes
 from database import Movie, User, UserMovieHistory
 from utils import INLINE_THUMB_URL
 from utils.decorators import channel_subscription_required, user_registered_required
-from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged
+from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged, send_linked_series_card
 from utils.search import search_movies
 
 
@@ -112,6 +112,15 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
         return
 
     user = await User.get(telegram_id=update.effective_user.id)
+
+    # Link asosidagi serial — rasm/matn + har bir qism uchun havola tugmasi
+    if movie.is_linked_series:
+        child_parts = await get_child_parts(movie)
+        await send_linked_series_card(
+            context.bot, update.effective_chat.id, movie, child_parts,
+            user=user, user_id=update.effective_user.id, bot_username=context.bot.username,
+        )
+        return
 
     # Qismli kino — qismlar ro'yxatini ko'rsatish. Bu bosqichda hali hech narsa
     # tomosha qilinmagani uchun tarixga (UserMovieHistory) yozilmaydi — aks holda

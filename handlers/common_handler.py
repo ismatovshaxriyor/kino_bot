@@ -10,7 +10,7 @@ from database import User, Movie, UserMovieHistory
 from utils import error_notificator
 from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import channel_subscription_required, user_registered_required
-from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged
+from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged, send_linked_series_card
 from utils.search import search_movies
 
 DAILY_LIMIT = 3
@@ -141,6 +141,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user = await User.get(telegram_id=update.effective_user.id)
+
+        # Link asosidagi serial — rasm/matn + har bir qism uchun havola tugmasi
+        if movie.is_linked_series:
+            child_parts = await get_child_parts(movie)
+            await send_linked_series_card(
+                context.bot, update.effective_chat.id, movie, child_parts,
+                user=user, user_id=update.effective_user.id, bot_username=context.bot.username,
+            )
+            return
 
         # Qismli kino — qismlar ro'yxatini ko'rsatish. Bu bosqichda hali hech
         # narsa tomosha qilinmagani uchun tarixga (UserMovieHistory) yozilmaydi —

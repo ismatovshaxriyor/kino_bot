@@ -17,6 +17,7 @@ from utils.movie_card import (
     get_child_parts,
     is_privileged,
     movie_caption,
+    send_linked_series_card,
 )
 from utils.search import search_movies
 from handlers.history_handler import get_history_keyboard
@@ -216,6 +217,19 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user = await User.get(telegram_id=update.effective_user.id)
+
+        # Link asosidagi serial — rasm/matn + har bir qism uchun havola tugmasi
+        if movie.is_linked_series:
+            child_parts = await get_child_parts(movie)
+            try:
+                await query.delete_message()
+            except BadRequest:
+                pass
+            await send_linked_series_card(
+                context.bot, update.effective_chat.id, movie, child_parts,
+                user=user, user_id=update.effective_user.id, bot_username=context.bot.username,
+            )
+            return
 
         # Qismli kino — qismlar ro'yxatini ko'rsatish. Bu bosqichda hali hech
         # narsa tomosha qilinmagani uchun tarixga (UserMovieHistory) yozilmaydi —

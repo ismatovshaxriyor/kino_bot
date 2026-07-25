@@ -7,6 +7,7 @@ from .movie_handlers import *
 from .add_movie import *
 from .channel_handlers import *
 from .edit_movie_handler import *
+from .linked_series_handler import *
 from .statistics_handler import *
 from .broadcast_handler import *
 from .file_checker_handler import *

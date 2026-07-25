@@ -142,6 +142,55 @@ async def build_movie_card(movie: Movie, *, user, user_id: int, bot_username: st
     return caption, (InlineKeyboardMarkup(btns) if btns else None)
 
 
+async def build_linked_series_card(movie: Movie, child_parts: list[Movie], *, user, user_id: int, bot_username: str):
+    """Link asosidagi serial uchun (caption, reply_markup).
+
+    Har bir qism uchun kanaldagi postga to'g'ridan-to'g'ri olib boruvchi
+    ``url=`` tugma beriladi — bosilganda botdan hech narsa yuborilmaydi,
+    Telegram foydalanuvchini kanalga o'zi olib boradi.
+    """
+    caption = await movie_caption(movie)
+
+    btns = []
+    if not await Rating.exists(user=user, movie=movie):
+        btns.append([InlineKeyboardButton("⭐ Baholash", callback_data=f"rate_movie_{movie.movie_id}")])
+
+    if is_privileged(user, user_id):
+        btns.append([InlineKeyboardButton("✏️ Tahrirlash", callback_data=f"ls:view_{movie.movie_id}")])
+
+    if movie.movie_code:
+        btns.append([_share_button(movie, bot_username)])
+
+    row = []
+    for part in child_parts:
+        if not part.watch_url:
+            continue
+        row.append(InlineKeyboardButton(f"▶️ {part.part_number}-qism", url=part.watch_url))
+        if len(row) == 3:
+            btns.append(row)
+            row = []
+    if row:
+        btns.append(row)
+
+    return caption, (InlineKeyboardMarkup(btns) if btns else None)
+
+
+async def send_linked_series_card(bot, chat_id: int, movie: Movie, child_parts: list[Movie], *, user, user_id: int, bot_username: str) -> None:
+    """Link asosidagi serial kartasini yuboradi (rasm bo'lsa foto, bo'lmasa matn)."""
+    caption, reply_markup = await build_linked_series_card(
+        movie, child_parts, user=user, user_id=user_id, bot_username=bot_username
+    )
+    if movie.poster_file_id:
+        await bot.send_photo(
+            chat_id=chat_id, photo=movie.poster_file_id, caption=caption,
+            parse_mode="HTML", reply_markup=reply_markup,
+        )
+    else:
+        await bot.send_message(
+            chat_id=chat_id, text=caption, parse_mode="HTML", reply_markup=reply_markup,
+        )
+
+
 def build_parts_list_card(movie: Movie, child_parts: list[Movie], *, is_admin: bool = False):
     """Qismli kino uchun (text, reply_markup) — qism tanlash ro'yxati.
 

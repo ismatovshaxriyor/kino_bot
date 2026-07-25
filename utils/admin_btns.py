@@ -8,6 +8,9 @@ admin_btns = [
         KeyboardButton("🎬 Kinolar"),
     ],
     [
+        KeyboardButton("🔗 Link seriallar"),
+    ],
+    [
         KeyboardButton("📢 Janrlar"),
         KeyboardButton("🌏 Davlatlar")
     ],

@@ -17,6 +17,11 @@ class Movie(models.Model):
     movie_id = fields.IntField(pk=True)
     movie_code = fields.IntField(unique=True, null=True)
     file_id = fields.TextField(null=True)
+    poster_file_id = fields.TextField(null=True)
+    watch_url = fields.TextField(null=True)
+    # Root kino "link asosidagi serial"mi? (rasm ixtiyoriy bo'lgani uchun
+    # poster_file_id mavjudligiga tayanib bo'lmaydi — aniq belgi kerak)
+    is_linked_series = fields.BooleanField(default=False)
     movie_name = fields.CharField(max_length=255)
     movie_genre = fields.ManyToManyField('models.Genre', related_name='movies', null=True)
     movie_country = fields.ManyToManyField('models.Countries', related_name='movies', null=True)

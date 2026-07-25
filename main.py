@@ -37,6 +37,8 @@ def main():
 
     bot.add_handler(add_movie_conf_handler)
     bot.add_handler(edit_movie_handler)
+    bot.add_handler(linked_series_add_handler)
+    bot.add_handler(linked_series_edit_handler)
     bot.add_handler(broadcast_conv_handler)
 
     # Admin handlers
@@ -47,6 +49,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🌏 Davlatlar") & private_filter, get_countries))
     bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar") & private_filter, get_managers))
     bot.add_handler(MessageHandler(filters.Regex(r"🎬 Kinolar") & private_filter, get_movies))
+    bot.add_handler(MessageHandler(filters.Regex(r"🔗 Link seriallar") & private_filter, ls_list_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Kanallar") & private_filter, get_channels))
     bot.add_handler(MessageHandler(filters.Regex(r"📊 Statistika") & private_filter, statistics_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🔍 Tekshirish") & private_filter, file_check_handler))
@@ -64,6 +67,7 @@ def main():
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, message_handler))
 
     # Callbacks
+    bot.add_handler(CallbackQueryHandler(ls_list_page_callback, pattern=r"^ls:list_page_"))
     bot.add_handler(CallbackQueryHandler(movie_callback, pattern=r"^movie_"))
     bot.add_handler(CallbackQueryHandler(genre_callback, pattern=r"^genre_"))
     bot.add_handler(CallbackQueryHandler(country_callback, pattern=r"^country_"))
