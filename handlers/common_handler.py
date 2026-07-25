@@ -11,6 +11,7 @@ from utils import error_notificator
 from utils.settings import MOVIES_PER_PAGE
 from utils.decorators import channel_subscription_required, user_registered_required
 from utils.movie_card import build_movie_card, build_parts_list_card, get_child_parts, is_privileged
+from utils.search import search_movies
 
 DAILY_LIMIT = 3
 
@@ -53,8 +54,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Kinolarni qidirish
-        movies_query = Movie.filter(movie_name__icontains=search_query, parent_movie=None)
-        total = await movies_query.count()
+        movies, total = await search_movies(search_query, limit=MOVIES_PER_PAGE)
 
         if total == 0:
             await update.message.reply_text(
@@ -65,7 +65,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         total_pages = ceil(total / MOVIES_PER_PAGE)
-        movies = await movies_query.limit(MOVIES_PER_PAGE)
 
         # Tugmalar
         btns = []

@@ -18,6 +18,7 @@ from utils.movie_card import (
     is_privileged,
     movie_caption,
 )
+from utils.search import search_movies
 from handlers.history_handler import get_history_keyboard
 from handlers.top_handler import get_top_filter_keyboard, get_top_keyboard, get_top_title
 
@@ -80,6 +81,11 @@ async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 
     """Filtrlangan kinolarni olish"""
     offset = (page - 1) * MOVIES_PER_PAGE
 
+    if filter_type == "search":
+        movies, total = await search_movies(filter_value, limit=MOVIES_PER_PAGE, offset=offset)
+        total_pages = ceil(total / MOVIES_PER_PAGE) if total > 0 else 1
+        return movies, total, total_pages
+
     if filter_type == "genre":
         genre = await Genre.get_or_none(genre_id=int(filter_value))
         if not genre:
@@ -87,8 +93,6 @@ async def get_movies_by_filter(filter_type: str, filter_value: str, page: int = 
         movies_query = Movie.filter(movie_genre=genre, parent_movie=None)
     elif filter_type == "year":
         movies_query = Movie.filter(movie_year=int(filter_value), parent_movie=None)
-    elif filter_type == "search":
-        movies_query = Movie.filter(movie_name__icontains=filter_value, parent_movie=None)
     else:
         return [], 0, 0
 
