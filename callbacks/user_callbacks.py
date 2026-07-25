@@ -1,3 +1,5 @@
+from html import escape
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -8,7 +10,7 @@ from tortoise.exceptions import IntegrityError
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
 from utils import user_keyboard
-from utils.settings import MOVIES_PER_PAGE
+from utils.settings import MOVIES_PER_PAGE, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from utils.error_notificator import error_notificator
 from utils.movie_card import (
@@ -40,6 +42,37 @@ async def _record_history(user: User, movie: Movie) -> None:
     history, created = await UserMovieHistory.get_or_create(user=user, movie=movie)
     if not created:
         await history.save()
+
+
+async def _report_broken_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Link asosidagi serial qismining havolasi ishlamasa — adminlarga darhol xabar beradi."""
+    query = update.callback_query
+    part_id = int(query.data.removeprefix("report_broken_"))
+    part = await Movie.get_or_none(movie_id=part_id)
+
+    if not part or not part.parent_movie_id:
+        await _safe_answer(query, "⚠️ Qism topilmadi.", show_alert=True)
+        return
+
+    root = await Movie.get_or_none(movie_id=part.parent_movie_id)
+    reporter = update.effective_user
+    root_name = escape(root.movie_name) if root else "Noma'lum"
+    text = (
+        f"🚫 <b>Havola ishlamayapti deb xabar berildi!</b>\n\n"
+        f"🎬 Serial: <b>{root_name}</b> "
+        f"(kod: {root.movie_code if root and root.movie_code else '-'})\n"
+        f"🔗 Qism: {part.part_number}-qism\n"
+        f"🌐 Havola: {escape(part.watch_url or '-')}\n"
+        f"👤 Xabar bergan: {escape(reporter.first_name or '')} "
+        f"(@{reporter.username or 'None'}, id=<code>{reporter.id}</code>)"
+    )
+    for admin_id in {ADMIN_ID, MANAGER_ID}:
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=text, parse_mode="HTML")
+        except Exception:
+            pass
+
+    await _safe_answer(query, "✅ Xabaringiz yuborildi, tez orada tekshiriladi. Rahmat!", show_alert=True)
 
 
 async def _send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE, movie: Movie, user: User) -> None:
@@ -445,6 +478,10 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode="HTML")
         else:
             await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode="HTML")
+
+    # Link asosidagi serial qismi ishlamayapti deb xabar berish
+    elif data.startswith("report_broken_"):
+        await _report_broken_link(update, context)
 
     # Noop
     elif data == "noop":

@@ -161,16 +161,13 @@ async def build_linked_series_card(movie: Movie, child_parts: list[Movie], *, us
     if movie.movie_code:
         btns.append([_share_button(movie, bot_username)])
 
-    row = []
     for part in child_parts:
         if not part.watch_url:
             continue
-        row.append(InlineKeyboardButton(f"▶️ {part.part_number}-qism", url=part.watch_url))
-        if len(row) == 3:
-            btns.append(row)
-            row = []
-    if row:
-        btns.append(row)
+        btns.append([
+            InlineKeyboardButton(f"▶️ {part.part_number}-qism", url=part.watch_url),
+            InlineKeyboardButton("🚫 Ishlamayapti", callback_data=f"report_broken_{part.movie_id}"),
+        ])
 
     return caption, (InlineKeyboardMarkup(btns) if btns else None)
 
