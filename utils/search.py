@@ -30,11 +30,19 @@ def _strip_part_suffix(query: str) -> str:
     stripped = re.sub(r"\s+", " ", stripped).strip()
     return stripped if stripped else query
 
+# Qismlar odatda ota-kino nomini o'zgarissiz meros qiladi (create_part_movie_helper
+# shunday yaratadi) — bunday qismlarni natijada alohida-alohida ko'rsatmaslik uchun
+# ular chetlab o'tiladi (ota-kino allaqachon mos keladi). Lekin admin bitta qismga
+# o'ziga xos nom bergan bo'lsa (masalan "Qasoskorlar 2: Altron Davri" — franshizaning
+# alohida filmi), bu holda o'sha nom bo'yicha ham topilishi kerak — shuning uchun
+# ota-kino bilan solishtirib, faqat nomi haqiqatan farq qiladigan qismlar qidiruvga
+# o'z ID'si bilan qo'shiladi.
+_FROM_CLAUSE = "FROM movie m LEFT JOIN movie p ON m.parent_movie_id = p.movie_id"
 _WHERE_CLAUSE = """
-    parent_movie_id IS NULL
+    (m.parent_movie_id IS NULL OR m.movie_name <> p.movie_name)
     AND (
-        uz_normalize(movie_name) ILIKE '%%' || uz_normalize(%s) || '%%'
-        OR similarity(uz_normalize(movie_name), uz_normalize(%s)) > %s
+        uz_normalize(m.movie_name) ILIKE '%%' || uz_normalize(%s) || '%%'
+        OR similarity(uz_normalize(m.movie_name), uz_normalize(%s)) > %s
     )
 """
 
@@ -45,19 +53,19 @@ async def search_movie_ids(query: str, *, limit: int, offset: int = 0) -> tuple[
     conn = Tortoise.get_connection("default")
 
     count_rows = await conn.execute_query_dict(
-        f"SELECT COUNT(*) AS cnt FROM movie WHERE {_WHERE_CLAUSE}",
+        f"SELECT COUNT(*) AS cnt {_FROM_CLAUSE} WHERE {_WHERE_CLAUSE}",
         [query, query, SIMILARITY_THRESHOLD],
     )
     total = count_rows[0]["cnt"] if count_rows else 0
 
     rows = await conn.execute_query_dict(
         f"""
-        SELECT movie_id FROM movie
+        SELECT m.movie_id {_FROM_CLAUSE}
         WHERE {_WHERE_CLAUSE}
         ORDER BY
-            (uz_normalize(movie_name) ILIKE '%%' || uz_normalize(%s) || '%%') DESC,
-            similarity(uz_normalize(movie_name), uz_normalize(%s)) DESC,
-            movie_name ASC
+            (uz_normalize(m.movie_name) ILIKE '%%' || uz_normalize(%s) || '%%') DESC,
+            similarity(uz_normalize(m.movie_name), uz_normalize(%s)) DESC,
+            m.movie_name ASC
         LIMIT %s OFFSET %s
         """,
         [query, query, SIMILARITY_THRESHOLD, query, query, limit, offset],

@@ -32,7 +32,14 @@ async def _answer_inline_query_safely(query, results, cache_time: int = 30) -> N
         raise
 
 
-def _to_result(movie: Movie) -> InlineQueryResultArticle:
+def _to_result(movie: Movie) -> InlineQueryResultArticle | None:
+    # Nomi ota-kinosidan farq qiladigan qismlar endi qidiruvda o'z ID'si bilan
+    # chiqishi mumkin (utils/search.py), lekin ular movie_code'ga ega emas —
+    # "/kino movie_None" yuborilib ketmasligi uchun bunday natijalar shu yerda
+    # (faqat inline rejimda, chunki u kod orqali ulashishga tayanadi) chetlab o'tiladi.
+    if not movie.movie_code:
+        return None
+
     title = f"{movie.movie_name} ({movie.movie_year or '?'})"
     desc_rating = f"{movie.average_rating}/5" if movie.rating_count > 0 else "N/A"
     description = f"⭐ {desc_rating} • Kod: {movie.movie_code}"
