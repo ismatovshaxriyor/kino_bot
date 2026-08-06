@@ -9,7 +9,7 @@ from tortoise.expressions import F
 from tortoise.exceptions import IntegrityError
 
 from database import Genre, Movie, Rating, User, UserMovieHistory
-from utils import user_keyboard
+from utils import get_user_keyboard
 from utils.settings import MOVIES_PER_PAGE, ADMIN_ID, MANAGER_ID
 from utils.decorators import user_registered_required
 from utils.error_notificator import error_notificator
@@ -319,7 +319,7 @@ async def user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="👇 Menyu:",
-            reply_markup=user_keyboard
+            reply_markup=await get_user_keyboard(update.effective_user.id)
         )
 
     # Tarix pagination

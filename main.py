@@ -45,6 +45,7 @@ def main():
     # Admin handlers - Only Private
     private_filter = filters.ChatType.PRIVATE
 
+    bot.add_handler(MessageHandler(filters.Regex(r"🔐 Admin panel") & private_filter, admin_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar") & private_filter, get_genres))
     bot.add_handler(MessageHandler(filters.Regex(r"🌏 Davlatlar") & private_filter, get_countries))
     bot.add_handler(MessageHandler(filters.Regex(r"👤 Managerlar") & private_filter, get_managers))

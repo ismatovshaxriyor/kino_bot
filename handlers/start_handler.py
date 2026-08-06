@@ -5,7 +5,7 @@ from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes
 
 from database import User
-from utils import error_notificator, user_keyboard
+from utils import error_notificator, get_user_keyboard
 from utils.decorators import channel_subscription_required
 
 
@@ -110,7 +110,7 @@ async def _start_handler_impl(update: Update, context: ContextTypes.DEFAULT_TYPE
                 # Private chats or missing pin permissions.
                 pass
 
-        await update.message.reply_text("👇 Menyu:", reply_markup=user_keyboard)
+        await update.message.reply_text("👇 Menyu:", reply_markup=await get_user_keyboard(telegram_id))
 
     except Exception as e:
         await error_notificator.notify(context, e, update)

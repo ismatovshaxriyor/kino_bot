@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from utils import admin_required, user_keyboard
+from utils import admin_required, get_user_keyboard
 from utils.admin_btns import get_admin_keyboard
 
 
@@ -17,5 +17,5 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ Oddiy menyuga qaytdingiz.",
-        reply_markup=user_keyboard
+        reply_markup=await get_user_keyboard(update.effective_user.id)
     )
