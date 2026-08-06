@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from database import Genre, Movie
+from database import Genre, Movie, User
 from utils.decorators import channel_subscription_required, user_registered_required
 
 
@@ -113,6 +113,25 @@ async def search_by_year_handler(update: Update, context: ContextTypes.DEFAULT_T
         "Tanlangan yildagi barcha kinolar ko'rsatiladi.",
         reply_markup=keyboard,
         parse_mode="HTML"
+    )
+
+
+@user_registered_required
+@channel_subscription_required
+async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """🤝 Do'stlarni taklif qilish"""
+    telegram_id = update.effective_user.id
+    user = await User.get(telegram_id=telegram_id)
+    referral_count = await User.filter(referred_by=user).count()
+    referral_link = f"https://t.me/{context.bot.username}?start=ref_{telegram_id}"
+
+    await update.message.reply_text(
+        "🤝 <b>Do'stlaringizni taklif qiling!</b>\n\n"
+        f"👇 Sizning shaxsiy havolangiz:\n<code>{referral_link}</code>\n\n"
+        f"👥 Siz orqali botga qo'shilganlar: <b>{referral_count} kishi</b>\n\n"
+        "Havolani do'stlaringizga yuboring. Ular shu havola orqali botni ishga tushirishsa, "
+        "avtomatik ravishda sizning hisobingizga qo'shiladi.",
+        parse_mode="HTML",
     )
 
 

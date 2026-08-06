@@ -36,6 +36,7 @@ def _stats_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("⭐ Reyting", callback_data="stats_rating"),
             ],
             [InlineKeyboardButton("🏆 Top kinolar", callback_data="stats_top")],
+            [InlineKeyboardButton("🤝 Referallar", callback_data="stats_referral")],
             [InlineKeyboardButton("📊 Grafik hisobot", callback_data="stats_chart_menu")],
             [InlineKeyboardButton("🔄 Yangilash", callback_data="stats_refresh")],
         ]
@@ -168,6 +169,35 @@ async def _top_text() -> str:
         f"{viewed_text}\n\n"
         "<b>Top 5 eng yuqori reytingli:</b>\n"
         f"{rated_text}"
+    )
+
+
+async def _referral_text() -> str:
+    from tortoise.functions import Count
+
+    total_referred = await User.filter(referred_by_id__isnull=False).count()
+
+    top_referrers = (
+        await User.annotate(ref_count=Count("referrals"))
+        .filter(ref_count__gt=0)
+        .order_by("-ref_count")
+        .limit(20)
+    )
+
+    if top_referrers:
+        lines = []
+        for i, u in enumerate(top_referrers, start=1):
+            name = f"@{u.username}" if u.username else (u.first_name or str(u.telegram_id))
+            lines.append(f"{i}. {name} — <b>{u.ref_count}</b> kishi (<code>{u.telegram_id}</code>)")
+        leaderboard_text = "\n".join(lines)
+    else:
+        leaderboard_text = "—"
+
+    return (
+        "🤝 <b>Statistika — Referallar</b>\n\n"
+        f"👥 Referal orqali qo'shilgan foydalanuvchilar: <b>{total_referred}</b>\n\n"
+        "<b>Eng ko'p taklif qilganlar:</b>\n"
+        f"{leaderboard_text}"
     )
 
 
@@ -529,6 +559,7 @@ async def statistics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             "ai": _ai_text,
             "rating": _rating_text,
             "top": _top_text,
+            "referral": _referral_text,
             "refresh": _overview_text,
         }
         build = builders.get(section, _overview_text)

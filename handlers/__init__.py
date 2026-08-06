@@ -5,7 +5,8 @@ from .user_handler import (
     search_by_name_handler,
     search_by_genre_handler,
     search_by_year_handler,
-    ai_assistant_handler
+    ai_assistant_handler,
+    referral_handler
 )
 from .history_handler import history_handler
 from .top_handler import top_handler

@@ -28,22 +28,51 @@ def _start_caption(first_name: str, created: bool) -> str:
     )
 
 
-@channel_subscription_required
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Referal kodini (agar bo'lsa) obuna tekshiruvidan oldin saqlab qo'yamiz.
+
+    Kanalga a'zo bo'lmagan foydalanuvchi "ref_<id>" payloadi bilan birinchi
+    marta /start bossa, @channel_subscription_required uni bloklaydi va
+    asosiy funksiya (_start_handler_impl) ishga tushmaydi — payload
+    yo'qoladi. A'zo bo'lib qaytadan /start bosganda esa payload endi yo'q
+    (Telegram uni faqat bitta chaqiriqda beradi). Shu sabab kodni
+    user_data'ga saqlab, keyingi (argumentsiz) /start'da ham ishlata olamiz.
+    """
+    if context.args and context.args[0].startswith("ref_"):
+        context.user_data['pending_ref'] = context.args[0]
+
+    return await _start_handler_impl(update, context)
+
+
+@channel_subscription_required
+async def _start_handler_impl(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = update.effective_chat.first_name
     last_name = update.effective_chat.last_name
     username = update.effective_chat.username
     telegram_id = update.effective_chat.id
 
+    pending_ref = context.user_data.get('pending_ref')
+
     # Barcha statelarni to'liq tozalash
     context.user_data.clear()
 
     try:
-        user, created = await User.get_or_create(telegram_id=telegram_id, defaults={
+        referrer = None
+        ref_code = (context.args[0] if context.args and context.args[0].startswith("ref_") else None) or pending_ref
+        if ref_code:
+            ref_id_raw = ref_code[len("ref_"):]
+            if ref_id_raw.isdecimal() and int(ref_id_raw) != telegram_id:
+                referrer = await User.get_or_none(telegram_id=int(ref_id_raw))
+
+        defaults = {
             'first_name': first_name,
             'last_name': last_name if last_name else None,
-            'username': username if username else None
-        })
+            'username': username if username else None,
+        }
+        if referrer:
+            defaults['referred_by'] = referrer
+
+        user, created = await User.get_or_create(telegram_id=telegram_id, defaults=defaults)
 
         if context.args and context.args[0].isdecimal():
             from handlers.inline_query_handler import inline_movie_command_handler

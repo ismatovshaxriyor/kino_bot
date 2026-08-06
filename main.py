@@ -62,6 +62,7 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"📅 Yil bo'yicha") & private_filter, search_by_year_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🏆 Top kinolar") & private_filter, top_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi") & private_filter, ai_assistant_handler))
+    bot.add_handler(MessageHandler(filters.Regex(r"🤝 Do'stlarni taklif qilish") & private_filter, referral_handler))
 
     bot.add_handler(MessageHandler(filters.Document.ALL & private_filter, restore_receive_file_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, message_handler))

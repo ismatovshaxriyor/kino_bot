@@ -10,6 +10,9 @@ user_btns = [
         KeyboardButton("🏆 Top kinolar"),
         KeyboardButton("🤖 AI yordamchi")
     ],
+    [
+        KeyboardButton("🤝 Do'stlarni taklif qilish"),
+    ],
 ]
 
 user_keyboard = ReplyKeyboardMarkup(

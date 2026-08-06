@@ -19,6 +19,11 @@ class User(Model):
     last_name = fields.CharField(max_length=128, null=True)
     username = fields.CharField(max_length=128, null=True)
 
+    # Referal: shu foydalanuvchini botga kim taklif qilgan
+    referred_by = fields.ForeignKeyField(
+        'models.User', related_name='referrals', on_delete=fields.SET_NULL, null=True
+    )
+
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
