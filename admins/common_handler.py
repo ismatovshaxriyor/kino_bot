@@ -184,5 +184,39 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=confirm_keyboard
         )
 
+    elif state == "WAITING_REFERRAL_LOOKUP_ID":
+        raw = update.message.text.strip()
+        context.user_data['state'] = None
+
+        if raw.startswith("@"):
+            target = await User.get_or_none(username=raw[1:])
+        elif raw.isdecimal():
+            target = await User.get_or_none(telegram_id=int(raw))
+        else:
+            target = await User.get_or_none(username=raw)
+
+        back_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("⬅️ Referallarga qaytish", callback_data="stats_referral")]]
+        )
+
+        if not target:
+            await update.message.reply_text(
+                "❌ Bunday foydalanuvchi topilmadi.\n\n"
+                "Telegram ID (masalan <code>123456789</code>) yoki @username to'g'ri ekanligini tekshiring.",
+                reply_markup=back_keyboard,
+                parse_mode="HTML",
+            )
+            return
+
+        referred_count = await User.filter(referred_by=target).count()
+        name = f"@{target.username}" if target.username else (target.first_name or str(target.telegram_id))
+
+        await update.message.reply_text(
+            f"👤 <b>{name}</b> (<code>{target.telegram_id}</code>)\n\n"
+            f"👥 Taklif qilgan do'stlari: <b>{referred_count} kishi</b>",
+            reply_markup=back_keyboard,
+            parse_mode="HTML",
+        )
+
     else:
         pass

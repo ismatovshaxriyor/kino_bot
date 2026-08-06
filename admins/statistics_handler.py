@@ -43,6 +43,15 @@ def _stats_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _referral_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🔍 Foydalanuvchi qidirish", callback_data="stats_referral_lookup")],
+            [InlineKeyboardButton("⬅️ Ortga", callback_data="stats_overview")],
+        ]
+    )
+
+
 def _chart_period_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -553,13 +562,27 @@ async def statistics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _send_stats_chart(update, context, period)
             return
 
+        if section == "referral":
+            await query.edit_message_text(
+                await _referral_text(), reply_markup=_referral_keyboard(), parse_mode="HTML"
+            )
+            return
+
+        if section == "referral_lookup":
+            context.user_data['state'] = "WAITING_REFERRAL_LOOKUP_ID"
+            await query.edit_message_text(
+                "🔍 <b>Foydalanuvchi bo'yicha qidirish</b>\n\n"
+                "Foydalanuvchining Telegram ID raqamini yoki @username'ini yuboring:",
+                parse_mode="HTML",
+            )
+            return
+
         builders = {
             "overview": _overview_text,
             "activity": _activity_text,
             "ai": _ai_text,
             "rating": _rating_text,
             "top": _top_text,
-            "referral": _referral_text,
             "refresh": _overview_text,
         }
         build = builders.get(section, _overview_text)
