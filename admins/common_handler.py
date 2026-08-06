@@ -1,9 +1,35 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from utils import admin_required
+from utils import admin_required, get_user_keyboard
+from utils.admin_btns import get_admin_keyboard
+from utils.settings import ADMIN_ID, MANAGER_ID
 from database import User
 from .managers_handler import get_managers_btns
+
+
+async def cancel_state_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/cancel — ConversationHandler'siz oddiy "state" kutish oqimlarini bekor qiladi.
+
+    add_movie/edit_movie/broadcast — o'zining ConversationHandler + /cancel
+    fallback'iga ega, shuning uchun bu yerga umuman yetib kelmaydi (ular
+    ro'yxatda oldinroq turadi va faol suhbatni o'zi ushlab qoladi). Lekin
+    genre/country/manager/kanal/referral-lookup kabi oddiy `context.user_data
+    ['state']`ga tayanadigan oqimlarda /cancel ishlamas edi — shu handler
+    ularning barchasi uchun bitta umumiy chiqish yo'lini beradi.
+    """
+    if not context.user_data.get('state'):
+        return
+
+    context.user_data['state'] = None
+    user_id = update.effective_user.id
+
+    user = await User.get_or_none(telegram_id=user_id)
+    is_admin = (user and user.user_type == 'admin') or user_id in (ADMIN_ID, MANAGER_ID)
+    keyboard = get_admin_keyboard(user_id) if is_admin else await get_user_keyboard(user_id)
+
+    await update.message.reply_text("❌ Bekor qilindi.", reply_markup=keyboard)
+
 
 @admin_required
 async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

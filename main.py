@@ -41,6 +41,11 @@ def main():
     bot.add_handler(linked_series_edit_handler)
     bot.add_handler(broadcast_conv_handler)
 
+    # ConversationHandler'lardan keyin — ular o'zining faol suhbatini /cancel
+    # bilan birga o'zi ushlab qoladi, bu yerga faqat ConversationHandler'siz
+    # oddiy "state" oqimlari (genre/country/manager/kanal/referral-lookup) uchun yetib keladi.
+    bot.add_handler(CommandHandler("cancel", cancel_state_handler))
+
     # Admin handlers
     # Admin handlers - Only Private
     private_filter = filters.ChatType.PRIVATE

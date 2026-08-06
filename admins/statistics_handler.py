@@ -572,7 +572,8 @@ async def statistics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data['state'] = "WAITING_REFERRAL_LOOKUP_ID"
             await query.edit_message_text(
                 "🔍 <b>Foydalanuvchi bo'yicha qidirish</b>\n\n"
-                "Foydalanuvchining Telegram ID raqamini yoki @username'ini yuboring:",
+                "Foydalanuvchining Telegram ID raqamini yoki @username'ini yuboring.\n\n"
+                "❌ Bekor qilish uchun /cancel bosing",
                 parse_mode="HTML",
             )
             return
