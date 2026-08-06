@@ -32,26 +32,26 @@ async def _answer_inline_query_safely(query, results, cache_time: int = 30) -> N
         raise
 
 
-def _to_result(movie: Movie) -> InlineQueryResultArticle | None:
-    # Nomi ota-kinosidan farq qiladigan qismlar endi qidiruvda o'z ID'si bilan
-    # chiqishi mumkin (utils/search.py), lekin ular movie_code'ga ega emas —
-    # "/kino movie_None" yuborilib ketmasligi uchun bunday natijalar shu yerda
-    # (faqat inline rejimda, chunki u kod orqali ulashishga tayanadi) chetlab o'tiladi.
-    if not movie.movie_code:
-        return None
-
+def _to_result(movie: Movie) -> InlineQueryResultArticle:
     title = f"{movie.movie_name} ({movie.movie_year or '?'})"
     desc_rating = f"{movie.average_rating}/5" if movie.rating_count > 0 else "N/A"
-    description = f"⭐ {desc_rating} • Kod: {movie.movie_code}"
+
+    # O'ziga xos nom bergan qismlar (utils/search.py) movie_code'ga ega emas
+    # (faqat qidiruv orqali topiladi, alohida kod berilmagan) — bunday holda
+    # ichki movie_id bo'yicha topiladigan "part_<id>" formatidan foydalanamiz.
+    if movie.movie_code:
+        description = f"⭐ {desc_rating} • Kod: {movie.movie_code}"
+        payload = f"movie_{movie.movie_code}"
+    else:
+        description = f"⭐ {desc_rating}"
+        payload = f"part_{movie.movie_id}"
 
     return InlineQueryResultArticle(
         id=f"mv_{movie.movie_id}",
         title=title[:80],
         description=description[:256],
         thumbnail_url=INLINE_THUMB_URL if INLINE_THUMB_URL else None,
-        input_message_content=InputTextMessageContent(
-            f"/kino movie_{movie.movie_code}"
-        ),
+        input_message_content=InputTextMessageContent(f"/kino {payload}"),
     )
 
 
@@ -79,11 +79,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         movies, _ = await search_movies(q, limit=MAX_INLINE_RESULTS)
 
-    results = []
-    for movie in movies[:MAX_INLINE_RESULTS]:
-        r = _to_result(movie)
-        if r:
-            results.append(r)
+    results = [_to_result(movie) for movie in movies[:MAX_INLINE_RESULTS]]
 
     await _answer_inline_query_safely(query, results, cache_time=30)
 
@@ -98,6 +94,12 @@ def _extract_movie_code(raw_arg: str) -> int | None:
     return None
 
 
+def _extract_part_id(raw_arg: str) -> int | None:
+    """"part_<movie_id>" formatidagi (kodsiz qism) argumentni ajratib oladi."""
+    m = re.match(r"^part_(\d+)$", raw_arg.strip())
+    return int(m.group(1)) if m else None
+
+
 @user_registered_required
 @channel_subscription_required
 async def inline_movie_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,15 +110,24 @@ async def inline_movie_command_handler(update: Update, context: ContextTypes.DEF
         await update.message.reply_text("⚠️ Foydalanish: /kino <kod>\nMasalan: /kino 41")
         return
 
-    movie_code = _extract_movie_code(context.args[0])
-    if movie_code is None:
-        await update.message.reply_text("⚠️ Kod noto'g'ri formatda. Masalan: /kino 41 yoki /kino movie_41")
-        return
+    part_id = _extract_part_id(context.args[0])
+    if part_id is not None:
+        # Kodsiz, o'ziga xos nomli qism — ichki movie_id bo'yicha qidiriladi
+        # (utils/search.py orqali topilib, inline natijada shu formatda beriladi).
+        movie = await Movie.get_or_none(movie_id=part_id)
+        if not movie:
+            await update.message.reply_text("📭 Kino topilmadi.", parse_mode="HTML")
+            return
+    else:
+        movie_code = _extract_movie_code(context.args[0])
+        if movie_code is None:
+            await update.message.reply_text("⚠️ Kod noto'g'ri formatda. Masalan: /kino 41 yoki /kino movie_41")
+            return
 
-    movie = await Movie.get_or_none(movie_code=movie_code)
-    if not movie:
-        await update.message.reply_text(f"📭 <b>{movie_code}</b> kodli kino topilmadi.", parse_mode="HTML")
-        return
+        movie = await Movie.get_or_none(movie_code=movie_code)
+        if not movie:
+            await update.message.reply_text(f"📭 <b>{movie_code}</b> kodli kino topilmadi.", parse_mode="HTML")
+            return
 
     user = await User.get(telegram_id=update.effective_user.id)
 
