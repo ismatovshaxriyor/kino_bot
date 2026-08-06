@@ -8,9 +8,27 @@ mos kelish natijalari trigram o'xshashlik darajasidan ustun qo'yib
 saralanadi, shu bilan birga bir-ikkita harfi xato yozilgan so'zlar ham
 (masalan "pulat" -> "po'lat") topiladi.
 """
+import re
+
 from tortoise import Tortoise
 
 SIMILARITY_THRESHOLD = 0.25
+
+# "2-qism", "2 qism", "2qism", "qism 2", "3-qism" kabi qism-raqam
+# iboralarini so'rovdan olib tashlash uchun. Qismlar bazada alohida Movie
+# qatori bo'lib, movie_name'i ota-kino nomi bilan bir xil (part_number'da
+# saqlanadi, nomida emas) — shuning uchun "Kino nomi 2-qism" deb qidirilsa,
+# "2-qism" qismi olib tashlanmasa so'rov nomga mos kelmay qoladi.
+_PART_SUFFIX_RE = re.compile(
+    r"(?:\bqism\s*-?\s*\d+\b|\b\d+\s*-?\s*qism\b)", re.IGNORECASE
+)
+
+
+def _strip_part_suffix(query: str) -> str:
+    """So'rovdan "N-qism" iborasini olib tashlaydi (qolgani bo'sh bo'lmasa)."""
+    stripped = _PART_SUFFIX_RE.sub(" ", query)
+    stripped = re.sub(r"\s+", " ", stripped).strip()
+    return stripped if stripped else query
 
 _WHERE_CLAUSE = """
     parent_movie_id IS NULL
@@ -23,6 +41,7 @@ _WHERE_CLAUSE = """
 
 async def search_movie_ids(query: str, *, limit: int, offset: int = 0) -> tuple[list[int], int]:
     """Fuzzy qidiruvga mos kino id'larini (o'xshashlik bo'yicha saralangan) va jami sonini qaytaradi."""
+    query = _strip_part_suffix(query)
     conn = Tortoise.get_connection("default")
 
     count_rows = await conn.execute_query_dict(
