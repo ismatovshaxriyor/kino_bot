@@ -1,3 +1,5 @@
+import asyncio
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -100,12 +102,17 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         await query.edit_message_text("✅ Hozircha majburiy kanallar yo'q.")
         return
 
-    not_subscribed = []
-    for channel in channels:
-        chat_id = f"@{channel.username}" if channel.username else channel.channel_id
-        is_member = await is_user_subscribed(context.bot, user_id, chat_id)
-        if not is_member:
-            not_subscribed.append(channel)
+    membership_results = await asyncio.gather(*(
+        is_user_subscribed(
+            context.bot,
+            user_id,
+            f"@{channel.username}" if channel.username else channel.channel_id,
+        )
+        for channel in channels
+    ))
+    not_subscribed = [
+        channel for channel, is_member in zip(channels, membership_results) if not is_member
+    ]
 
     if not_subscribed:
         btns = []

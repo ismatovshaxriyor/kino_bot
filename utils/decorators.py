@@ -1,3 +1,4 @@
+import asyncio
 from functools import wraps
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -38,13 +39,21 @@ def channel_subscription_required(func):
             # Kanallar yo'q bo'lsa, tekshiruvsiz o'tkazish
             return await func(update, context, *args, **kwargs)
 
-        not_subscribed = []
-        for channel in channels:
-            # Username yoki ID orqali tekshirish
-            chat_id = f"@{channel.username}" if channel.username else channel.channel_id
-            is_member = await is_user_subscribed(context.bot, user_id, chat_id)
-            if not is_member:
-                not_subscribed.append(channel)
+        # Har bir kanal uchun Telegram API so'rovi tarmoq orqali ketadi —
+        # ketma-ket (sequential) tekshirish kanallar soni ortgani sayin har
+        # bir foydalanuvchi amalini chiziqli sekinlashtiradi. Parallel
+        # yuborib, eng sekin so'rov vaqtigacha kutamiz (N marta emas, 1 marta).
+        membership_results = await asyncio.gather(*(
+            is_user_subscribed(
+                context.bot,
+                user_id,
+                f"@{channel.username}" if channel.username else channel.channel_id,
+            )
+            for channel in channels
+        ))
+        not_subscribed = [
+            channel for channel, is_member in zip(channels, membership_results) if not is_member
+        ]
 
         if not_subscribed:
             # A'zo bo'lmagan kanallar ro'yxatini ko'rsatish
