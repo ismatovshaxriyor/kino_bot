@@ -131,6 +131,25 @@ def apply_redis_patch():
     logger.info("✅ Redis Patch (Full Coverage) muvaffaqiyatli qo'llanildi")
 
 
+def _broken_movie_markup(reply_markup):
+    """Video yuborilmagan kino uchun tugmalarni filtrlaydi.
+
+    Asl kartadagi Baholash/Ulashish tugmalari mazmunga mos kelmaydi (video
+    ko'rsatilmagan), shuning uchun faqat Tahrirlash (admin uchun) qoldiriladi.
+    """
+    if not reply_markup or "inline_keyboard" not in reply_markup:
+        return None
+    rows = []
+    for row in reply_markup["inline_keyboard"]:
+        kept = [
+            btn for btn in row
+            if str(btn.get("callback_data", "")).startswith(("edit_movie_", "ls:view_"))
+        ]
+        if kept:
+            rows.append(kept)
+    return {"inline_keyboard": rows} if rows else None
+
+
 async def _notify_video_failure(bot, chat_id, content, args, error_msg):
     """Video yuborilmaganda foydalanuvchiga va adminlarga xabar berish."""
     user_text = (
@@ -140,8 +159,9 @@ async def _notify_video_failure(bot, chat_id, content, args, error_msg):
     )
     try:
         fallback_args = {}
-        if "reply_markup" in args:
-            fallback_args["reply_markup"] = args["reply_markup"]
+        markup = _broken_movie_markup(args.get("reply_markup"))
+        if markup:
+            fallback_args["reply_markup"] = markup
         await _original_send_message(bot, chat_id=chat_id, text=user_text, parse_mode="HTML", **fallback_args)
     except Exception:
         await _original_send_message(bot, chat_id=chat_id, text=user_text, parse_mode="HTML")
