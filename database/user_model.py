@@ -1,5 +1,6 @@
 from tortoise.models import Model
 from tortoise import fields
+from tortoise.indexes import Index
 from enum import Enum
 
 class USER_TYPE(str, Enum):
@@ -36,3 +37,4 @@ class UserMovieHistory(Model):
 
     class Meta:
         unique_together = ('user', 'movie')
+        indexes = [Index(fields=['viewed_at']), Index(fields=['movie_id'])]

@@ -6,6 +6,7 @@ from tempfile import gettempdir
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+from tortoise import Tortoise
 
 from database import Channels, Countries, Genre, Movie, Rating, User, UserMovieHistory
 from utils import admin_required, error_notificator
@@ -140,22 +141,33 @@ async def _rating_text() -> str:
     )
 
 
+async def _top_viewed_movies(limit: int = 5) -> list[tuple[str, int]]:
+    """Eng ko'p ko'rilgan kinolar (qismlarning ko'rishlari ota-kino nomiga
+    jamlanadi) — GROUP BY bilan DB darajasida hisoblanadi, butun
+    UserMovieHistory jadvali xotiraga yuklanmaydi."""
+    conn = Tortoise.get_connection("default")
+    rows = await conn.execute_query_dict(
+        """
+        SELECT canonical.movie_name, agg.view_count
+        FROM (
+            SELECT COALESCE(m.parent_movie_id, m.movie_id) AS canonical_id, COUNT(*) AS view_count
+            FROM usermoviehistory h
+            JOIN movie m ON h.movie_id = m.movie_id
+            GROUP BY canonical_id
+        ) agg
+        JOIN movie canonical ON canonical.movie_id = agg.canonical_id
+        ORDER BY agg.view_count DESC
+        LIMIT %s
+        """,
+        [limit],
+    )
+    return [(r["movie_name"], r["view_count"]) for r in rows]
+
+
 async def _top_text() -> str:
-    # Ko'rilish bo'yicha top (qismlarning ko'rishlari ota-kino nomiga jamlanadi —
-    # har bir qism alohida Movie qatori bo'lgani uchun, aks holda bitta kino
-    # bir nechta alohida qatorga bo'linib ketadi)
-    view_map = {}
-    histories = await UserMovieHistory.all().prefetch_related("movie", "movie__parent_movie")
-    for item in histories:
-        parent = item.movie.parent_movie
-        canonical = parent if parent else item.movie
-        movie_id = canonical.movie_id
-        if movie_id not in view_map:
-            view_map[movie_id] = [canonical, 0]
-        view_map[movie_id][1] += 1
-    top_viewed = sorted(view_map.values(), key=lambda x: x[1], reverse=True)[:5]
+    top_viewed = await _top_viewed_movies(5)
     viewed_text = (
-        "\n".join(f"{i}. {m.movie_name} — {count} marta" for i, (m, count) in enumerate(top_viewed, start=1))
+        "\n".join(f"{i}. {name} — {count} marta" for i, (name, count) in enumerate(top_viewed, start=1))
         if top_viewed else
         "—"
     )

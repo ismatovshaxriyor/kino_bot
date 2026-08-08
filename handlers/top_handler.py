@@ -2,6 +2,7 @@ from math import ceil
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+from tortoise import Tortoise
 from tortoise.functions import Count
 
 from database import Movie
@@ -31,21 +32,59 @@ def get_top_filter_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(btns)
 
 
-async def _get_movies_for_filter(filter_type: str) -> list[Movie]:
+async def _filter_total(filter_type: str) -> int:
+    if filter_type == "rating":
+        return await Movie.filter(rating_count__gt=0, parent_movie=None).count()
+    return await Movie.filter(parent_movie=None).count()
+
+
+async def _rating_ordered_ids(limit: int, offset: int) -> list[int]:
+    """Reyting (o'rtacha ball) bo'yicha kino ID'lari.
+
+    ``average_rating`` saqlanadigan ustun emas (total_rating_sum/rating_count
+    dan hisoblanadi), shuning uchun DB darajasida saralash uchun raw SQL
+    ishlatiladi — utils/search.py dagi bir xil naqsh.
+    """
+    conn = Tortoise.get_connection("default")
+    rows = await conn.execute_query_dict(
+        """
+        SELECT movie_id FROM "movie"
+        WHERE rating_count > 0 AND parent_movie_id IS NULL
+        ORDER BY (total_rating_sum::float / rating_count) DESC, rating_count DESC, movie_id DESC
+        LIMIT %s OFFSET %s
+        """,
+        [limit, offset],
+    )
+    return [r["movie_id"] for r in rows]
+
+
+async def _get_movies_page(filter_type: str, *, limit: int, offset: int) -> list[Movie]:
+    """Tanlangan filtr uchun bitta sahifalik kinolarni DB darajasida oladi
+    (saralash va LIMIT/OFFSET DBda bajariladi — butun katalog xotiraga
+    yuklanmaydi)."""
     if filter_type == "views":
-        movies = await Movie.filter(parent_movie=None).annotate(views_count=Count("viewed_by")).all()
-        movies.sort(
-            key=lambda m: (getattr(m, "views_count", 0), m.average_rating, m.rating_count),
-            reverse=True,
+        return await (
+            Movie.filter(parent_movie=None)
+            .annotate(views_count=Count("viewed_by"))
+            .order_by("-views_count", "-movie_id")
+            .offset(offset)
+            .limit(limit)
         )
-        return movies
 
     if filter_type == "recent":
-        return await Movie.filter(parent_movie=None).order_by("-created_at")
+        return await (
+            Movie.filter(parent_movie=None)
+            .order_by("-created_at", "-movie_id")
+            .offset(offset)
+            .limit(limit)
+        )
 
-    movies = await Movie.filter(rating_count__gt=0, parent_movie=None).all()
-    movies.sort(key=lambda m: (m.average_rating, m.rating_count), reverse=True)
-    return movies
+    ids = await _rating_ordered_ids(limit, offset)
+    if not ids:
+        return []
+    movies = await Movie.filter(movie_id__in=ids)
+    by_id = {m.movie_id: m for m in movies}
+    return [by_id[i] for i in ids if i in by_id]
 
 
 def _movie_metric(movie: Movie, filter_type: str) -> str:
@@ -58,18 +97,15 @@ def _movie_metric(movie: Movie, filter_type: str) -> str:
 
 async def get_top_keyboard(filter_type: str = "rating", page: int = 1):
     """Tanlangan filter bo'yicha top kinolar."""
-    movies = await _get_movies_for_filter(filter_type)
-
-    total = len(movies)
+    total = await _filter_total(filter_type)
     if total == 0:
         return None, 0, 0
 
     total_pages = ceil(total / MOVIES_PER_PAGE)
     page = max(1, min(page, total_pages))
+    offset = (page - 1) * MOVIES_PER_PAGE
 
-    start = (page - 1) * MOVIES_PER_PAGE
-    end = start + MOVIES_PER_PAGE
-    current_movies = movies[start:end]
+    current_movies = await _get_movies_page(filter_type, limit=MOVIES_PER_PAGE, offset=offset)
 
     btns = []
     for movie in current_movies:
