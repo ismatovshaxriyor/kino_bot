@@ -12,7 +12,7 @@ async def get_managers_btns():
     if managers:
         btns = []
         for i, manager in enumerate(managers):
-            btn = InlineKeyboardButton(text=f"👤 {manager.first_name} {manager.last_name if manager.last_name else ''}", callback_data=f"manager_{manager.id}")
+            btn = InlineKeyboardButton(text=f"👤 {manager.first_name} {manager.last_name if manager.last_name else ''} ({manager.telegram_id})", callback_data=f"manager_{manager.id}")
             btns.append(btn)
             if i % 2 == 1:
                 manager_btns.append(btns)

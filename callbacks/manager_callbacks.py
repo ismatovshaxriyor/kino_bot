@@ -29,7 +29,12 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             keyboard = InlineKeyboardMarkup(btns)
 
-            await query.edit_message_text(f"👤 <b>Manager:</b> {manager.first_name}\n\n👇 Harakatni tanlang:", reply_markup=keyboard, parse_mode="HTML")
+            await query.edit_message_text(
+                f"👤 <b>Manager:</b> {manager.first_name}\n"
+                f"🆔 <b>ID:</b> <code>{manager.telegram_id}</code>\n\n"
+                "👇 Harakatni tanlang:",
+                reply_markup=keyboard, parse_mode="HTML",
+            )
         else:
             btn = [[InlineKeyboardButton("⬅️ Ortga", callback_data='manager_back')]]
             keyboard = InlineKeyboardMarkup(btn)
@@ -47,7 +52,12 @@ async def manager_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         manager = await User.get(id=manager_id)
         keyboard = InlineKeyboardMarkup(confirm_btns)
-        await query.edit_message_text(f"⚠️ <b>Manager:</b> {manager.first_name}\n\n🗑 O'chirishni tasdiqlaysizmi?", reply_markup=keyboard, parse_mode="HTML")
+        await query.edit_message_text(
+            f"⚠️ <b>Manager:</b> {manager.first_name}\n"
+            f"🆔 <b>ID:</b> <code>{manager.telegram_id}</code>\n\n"
+            "🗑 O'chirishni tasdiqlaysizmi?",
+            reply_markup=keyboard, parse_mode="HTML",
+        )
 
     elif data_sp[1] == 'back':
         keyboard, i = await get_managers_btns()
