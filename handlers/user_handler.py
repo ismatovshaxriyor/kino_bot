@@ -127,7 +127,7 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "🤝 <b>Do'stlaringizni taklif qiling!</b>\n\n"
-        f"👇 Sizning shaxsiy havolangiz:\n<code>{referral_link}</code>\n\n"
+        f"👇 Sizning shaxsiy havolangiz:\n{referral_link}\n\n"
         f"👥 Siz orqali botga qo'shilganlar: <b>{referral_count} kishi</b>\n\n"
         "Havolani do'stlaringizga yuboring. Ular shu havola orqali botni ishga tushirishsa, "
         "avtomatik ravishda sizning hisobingizga qo'shiladi.",
