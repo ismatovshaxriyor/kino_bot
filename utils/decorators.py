@@ -16,7 +16,12 @@ def admin_required(func):
         user = await User.get_or_none(telegram_id=user_id)
 
         if not ((user and user.user_type == 'admin') or user_id in (ADMIN_ID, MANAGER_ID)):
-            raise PermissionDenied()
+            text = "⛔ Sizda bu amalni bajarish uchun ruxsat yo'q."
+            if update.callback_query:
+                await update.callback_query.answer(text, show_alert=True)
+            elif update.message:
+                await update.message.reply_text(text)
+            return None
 
         return await func(update, context, *args, **kwargs)
     return wrapper
