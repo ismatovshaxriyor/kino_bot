@@ -8,7 +8,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from tortoise import Tortoise
 
-from database import Channels, Countries, Genre, Movie, Rating, User, UserMovieHistory
+from database import Channels, ChannelSubscription, Countries, Genre, Movie, Rating, User, UserMovieHistory
 from utils import admin_required, error_notificator
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ def _stats_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [InlineKeyboardButton("🏆 Top kinolar", callback_data="stats_top")],
             [InlineKeyboardButton("🤝 Referallar", callback_data="stats_referral")],
+            [InlineKeyboardButton("📢 Kanal obunachilari", callback_data="stats_channels")],
             [InlineKeyboardButton("📊 Grafik hisobot", callback_data="stats_chart_menu")],
             [InlineKeyboardButton("🔄 Yangilash", callback_data="stats_refresh")],
         ]
@@ -219,6 +220,31 @@ async def _referral_text() -> str:
         f"👥 Referal orqali qo'shilgan foydalanuvchilar: <b>{total_referred}</b>\n\n"
         "<b>Eng ko'p taklif qilganlar:</b>\n"
         f"{leaderboard_text}"
+    )
+
+
+async def _channels_text() -> str:
+    from tortoise.functions import Count
+
+    channels = (
+        await Channels.all()
+        .annotate(sub_count=Count("subscriptions"))
+        .order_by("-sub_count")
+    )
+
+    if channels:
+        lines = "\n".join(
+            f"{i}. {c.name} — <b>{c.sub_count}</b> obunachi"
+            for i, c in enumerate(channels, start=1)
+        )
+    else:
+        lines = "—"
+
+    return (
+        "📢 <b>Statistika — Kanal obunachilari</b>\n\n"
+        "Botning obuna tekshiruvi orqali tasdiqlangan (bot orqali qo'shilgan) "
+        "noyob foydalanuvchilar soni, kanal bo'yicha:\n\n"
+        f"{lines}"
     )
 
 
@@ -596,6 +622,7 @@ async def statistics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             "ai": _ai_text,
             "rating": _rating_text,
             "top": _top_text,
+            "channels": _channels_text,
             "refresh": _overview_text,
         }
         build = builders.get(section, _overview_text)

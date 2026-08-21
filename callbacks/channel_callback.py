@@ -3,7 +3,7 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from database import Channels
+from database import Channels, ChannelSubscription
 from admins import get_channel_btns
 
 
@@ -129,6 +129,14 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             reply_markup=keyboard
         )
     else:
+        # Har bir kanal uchun "bot orqali tasdiqlangan obunachi" hodisasini
+        # belgilaymiz (statistika uchun) — get_or_create bo'lgani sabab
+        # foydalanuvchi qayta tekshirsa ham qatorlar takrorlanmaydi.
+        await asyncio.gather(*(
+            ChannelSubscription.get_or_create(channel=channel, telegram_id=user_id)
+            for channel in channels
+        ))
+
         await query.edit_message_text(
             "✅ Ajoyib! Siz barcha kanallarga a'zo bo'ldingiz!\n\n"
             "Endi botdan foydalanishingiz mumkin. /start bosing."

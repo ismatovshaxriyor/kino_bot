@@ -1,4 +1,5 @@
 from .channels_model import *
+from .channel_subscription_model import *
 from .countries_model import *
 from .genre_model import *
 from .movie_model import *
