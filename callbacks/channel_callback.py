@@ -115,11 +115,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         return
 
     membership_results = await asyncio.gather(*(
-        is_user_subscribed(
-            context.bot,
-            user_id,
-            f"@{channel.username}" if channel.username else channel.channel_id,
-        )
+        is_user_subscribed(context.bot, user_id, channel)
         for channel in channels
     ))
     not_subscribed = [

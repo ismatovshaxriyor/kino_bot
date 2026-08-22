@@ -49,11 +49,7 @@ def channel_subscription_required(func):
         # bir foydalanuvchi amalini chiziqli sekinlashtiradi. Parallel
         # yuborib, eng sekin so'rov vaqtigacha kutamiz (N marta emas, 1 marta).
         membership_results = await asyncio.gather(*(
-            is_user_subscribed(
-                context.bot,
-                user_id,
-                f"@{channel.username}" if channel.username else channel.channel_id,
-            )
+            is_user_subscribed(context.bot, user_id, channel)
             for channel in channels
         ))
         not_subscribed = [

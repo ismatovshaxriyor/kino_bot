@@ -11,3 +11,4 @@ from .user_handler import (
 from .history_handler import history_handler
 from .top_handler import top_handler
 from .inline_query_handler import inline_query_handler, inline_movie_command_handler
+from .join_request_handler import channel_join_request_handler

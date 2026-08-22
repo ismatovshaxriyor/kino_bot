@@ -21,14 +21,26 @@ async def is_bot_admin(bot: Bot, chat_id: int | str) -> bool:
         return False
 
 
-async def is_user_subscribed(bot: Bot, user_id: int, chat_id: int | str) -> bool:
-    """Foydalanuvchining kanalga a'zo ekanligini tekshirish"""
+async def is_user_subscribed(bot: Bot, user_id: int, channel) -> bool:
+    """Foydalanuvchining kanalga a'zo ekanligini tekshirish.
+
+    Kanal yopiq (faqat tasdiqlash so'rovi orqali qo'shiladigan) bo'lsa,
+    admin hali so'rovni tasdiqlamagan bo'lsa ham — foydalanuvchi o'sha
+    so'rovni yuborgan bo'lsa, bu ham a'zolik sifatida hisoblanadi (bot
+    tomonidan "chat_join_request" hodisasi kelganda yozib qo'yilgan bo'ladi,
+    handlers/join_request_handler.py'ga qarang).
+    """
+    chat_id = f"@{channel.username}" if channel.username else channel.channel_id
+
     try:
         member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
-        return member.status in ("member", "administrator", "creator", "restricted")
+        if member.status in ("member", "administrator", "creator", "restricted"):
+            return True
     except TelegramError as e:
         logger.warning("Foydalanuvchi a'zoligini tekshirishda xato: %s", e)
-        return False
+
+    from database import ChannelJoinRequest
+    return await ChannelJoinRequest.filter(channel_id=channel.channel_id, telegram_id=user_id).exists()
 
 
 async def get_join_by_request_status(bot: Bot, chat_id: int | str) -> bool | None:
