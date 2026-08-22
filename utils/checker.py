@@ -31,6 +31,20 @@ async def is_user_subscribed(bot: Bot, user_id: int, chat_id: int | str) -> bool
         return False
 
 
+async def get_join_by_request_status(bot: Bot, chat_id: int | str) -> bool | None:
+    """Kanal/guruh yopiqmi (faqat tasdiqlash so'rovi orqali qo'shiladimi) — tekshirish.
+
+    True/False — holat aniq. None — aniqlab bo'lmadi (masalan bot o'sha
+    kanal/guruhda administrator emas yoki undan chiqarilgan).
+    """
+    try:
+        chat = await bot.get_chat(chat_id=chat_id)
+        return bool(chat.join_by_request)
+    except TelegramError as e:
+        logger.warning("Kanal/guruh yopiqligini tekshirishda xato: %s", e)
+        return None
+
+
 async def get_channel_info(bot: Bot, channel_input: str) -> dict | None:
     """
     Kanal username yoki ID bo'yicha ma'lumot olish.

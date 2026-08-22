@@ -1,10 +1,12 @@
 import asyncio
+from html import escape
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from database import Channels, ChannelSubscription
 from admins import get_channel_btns
+from utils.checker import get_join_by_request_status
 
 
 async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,6 +67,14 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             channel = await Channels.get_or_none(channel_id=channel_id)
 
             if channel:
+                join_by_request = await get_join_by_request_status(context.bot, channel_id)
+                if join_by_request is None:
+                    status_text = "❓ <b>Holati:</b> Aniqlab bo'lmadi (bot administrator emasligi mumkin)"
+                elif join_by_request:
+                    status_text = "🔒 <b>Holati:</b> Yopiq — faqat tasdiqlash so'rovi orqali qo'shiladi"
+                else:
+                    status_text = "🔓 <b>Holati:</b> Ochiq — erkin qo'shiladi"
+
                 btns = [
                     [
                         InlineKeyboardButton("🗑 O'chirish", callback_data=f"channel_delete_{channel_id}"),
@@ -74,11 +84,13 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard = InlineKeyboardMarkup(btns)
                 username_text = f"@{channel.username}" if channel.username else "yo'q"
                 await query.edit_message_text(
-                    f"📢 Kanal: {channel.name}\n"
-                    f"🆔 ID: {channel.channel_id}\n"
-                    f"👤 Username: {username_text}\n\n"
+                    f"📢 <b>Kanal:</b> {escape(channel.name)}\n"
+                    f"🆔 <b>ID:</b> {channel.channel_id}\n"
+                    f"👤 <b>Username:</b> {username_text}\n"
+                    f"{status_text}\n\n"
                     "Harakatni tanlang:",
-                    reply_markup=keyboard
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
                 )
             else:
                 btn = [[InlineKeyboardButton("⬅️ Ortga qaytish", callback_data='channel_back')]]
