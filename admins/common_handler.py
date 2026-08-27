@@ -1,3 +1,5 @@
+from html import escape
+import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -6,6 +8,81 @@ from utils.admin_btns import get_admin_keyboard
 from utils.settings import ADMIN_ID, MANAGER_ID
 from database import User
 from .managers_handler import get_managers_btns
+
+logger = logging.getLogger(__name__)
+
+
+def extract_forward_chat(message):
+    """Forward qilingan xabardan kanal yoki guruh (chat) obyektini ajratib oladi."""
+    origin = getattr(message, "forward_origin", None)
+    if not origin:
+        return None
+    if hasattr(origin, "chat") and origin.chat:
+        return origin.chat
+    if hasattr(origin, "sender_chat") and origin.sender_chat:
+        return origin.sender_chat
+    return None
+
+
+async def _process_channel_addition(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    chat_title: str,
+    chat_username: str | None,
+    chat_type: str = "channel",
+):
+    """Kanal yoki guruhni tekshirish (mavjudligi, adminligi) va tasdiqlash tugmalarini yuborish."""
+    from database import Channels
+    from utils.checker import is_bot_admin
+
+    existing = await Channels.get_or_none(channel_id=chat_id)
+    if existing:
+        await update.message.reply_text(
+            f"⚠️ <b>\"{escape(chat_title)}\"</b> allaqachon kanallar ro'yxatida mavjud!",
+            parse_mode="HTML",
+        )
+        return
+
+    is_admin = await is_bot_admin(context.bot, chat_id)
+    is_group = str(chat_type).lower() in ("group", "supergroup")
+    chat_type_label = "guruhida" if is_group else "kanalida"
+    chat_type_title = "Guruh" if is_group else "Kanal"
+
+    if not is_admin:
+        await update.message.reply_text(
+            f"❌ Bot <b>\"{escape(chat_title)}\"</b> {chat_type_label} admin emas!\n\n"
+            f"{chat_type_title}ni qo'shish uchun:\n"
+            f"1. Botni o'sha {chat_type_label} qo'shing\n"
+            f"2. Botga <b>administrator</b> huquqini bering\n"
+            f"3. So'ngra qaytadan xabarni forward qiling yoki username/ID yuboring",
+            parse_mode="HTML",
+        )
+        return
+
+    context.user_data['channel_id'] = chat_id
+    context.user_data['channel_username'] = chat_username
+    context.user_data['channel_name'] = chat_title
+    context.user_data['state'] = "WAITING_FOR_CONFIRM_CHANNEL"
+
+    confirm_btns = [
+        [
+            InlineKeyboardButton(text='✅ Tasdiqlash', callback_data='confirm_channel_add'),
+            InlineKeyboardButton(text='❌ Bekor qilish', callback_data='reject_channel_add'),
+        ]
+    ]
+    confirm_keyboard = InlineKeyboardMarkup(confirm_btns)
+    username_text = f"@{chat_username}" if chat_username else "mavjud emas (yopiq)"
+
+    await update.message.reply_text(
+        f"✅ Bot {chat_type_label} admin!\n\n"
+        f"📢 <b>{chat_type_title}:</b> {escape(chat_title)}\n"
+        f"🆔 <b>ID:</b> <code>{chat_id}</code>\n"
+        f"👤 <b>Username:</b> {username_text}\n\n"
+        f"Ushbu {chat_type_title.lower()}ni majburiy a'zolikka qo'shishni tasdiqlaysizmi?",
+        reply_markup=confirm_keyboard,
+        parse_mode="HTML",
+    )
 
 
 async def cancel_state_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,12 +110,15 @@ async def cancel_state_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 @admin_required
 async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message:
         return
 
     state = context.user_data.get('state')
 
     if state is None:
+        return
+
+    if state != "WAITING_CHANNEL_USERNAME" and not update.message.text:
         return
 
     if state == 'WAITING_GENRE_NAME':
@@ -155,60 +235,66 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"Yangi Manager: {new_manager.first_name} {new_manager.last_name if new_manager.last_name else None}. Tasdiqlaysizmi?", reply_markup=confirm_keyboard)
 
     elif state == "WAITING_CHANNEL_USERNAME":
-        from utils.checker import is_bot_admin, get_channel_info
-        from admins import get_channel_btns
+        from utils.checker import get_channel_info
 
-        channel_input = update.message.text.strip()
+        # 1. Forward qilingan xabar orqali kanal yoki guruhni avtomatik aniqlash
+        if update.message.forward_origin:
+            target_chat = extract_forward_chat(update.message)
+            if not target_chat:
+                await update.message.reply_text(
+                    "⚠️ <b>Bu xabar shaxsiy foydalanuvchidan uzatilgan!</b>\n\n"
+                    "Iltimos, aynan <b>kanal yoki guruhdan</b> xabar forward (uzatish) qiling "
+                    "yoki username/ID sini yuboring.",
+                    parse_mode="HTML",
+                )
+                return
 
-        # Kanal ma'lumotlarini olish
-        channel_info = await get_channel_info(context.bot, channel_input)
+            chat_id = target_chat.id
+            chat_title = getattr(target_chat, "title", None) or "Noma'lum"
+            chat_username = getattr(target_chat, "username", None)
+            chat_type = getattr(target_chat, "type", "channel")
 
-        if not channel_info:
+            try:
+                fresh_chat = await context.bot.get_chat(chat_id)
+                chat_title = fresh_chat.title or chat_title
+                chat_username = fresh_chat.username or chat_username
+                chat_type = fresh_chat.type or chat_type
+            except Exception as e:
+                logger.warning("get_chat error for %s: %s", chat_id, e)
+
+            await _process_channel_addition(
+                update, context, chat_id, chat_title, chat_username, chat_type
+            )
+
+        # 2. Qo'lda matn (username yoki ID) kiritilganda
+        elif update.message.text:
+            channel_input = update.message.text.strip()
+            channel_info = await get_channel_info(context.bot, channel_input)
+
+            if not channel_info:
+                await update.message.reply_text(
+                    "❌ <b>Kanal yoki guruh topilmadi!</b>\n\n"
+                    "Iltimos, to'g'ri username yoki ID kiriting, yoki kanaldan biror xabarni forward qiling:\n"
+                    "• Kanaldan xabarni forward qilish <i>(eng osoni)</i>\n"
+                    "• <code>@kanal_nomi</code>\n"
+                    "• <code>-100xxxxxxxxxx</code> (kanal/guruh ID)",
+                    parse_mode="HTML",
+                )
+                return
+
+            await _process_channel_addition(
+                update,
+                context,
+                channel_info['id'],
+                channel_info['title'],
+                channel_info['username'],
+                channel_info.get('type', 'channel'),
+            )
+        else:
             await update.message.reply_text(
-                "❌ Kanal topilmadi!\n\n"
-                "Iltimos to'g'ri username yoki ID kiriting:\n"
-                "• @kanal_nomi\n"
-                "• kanal_nomi\n"
-                "• -100xxxxxxxxxx (kanal ID)"
+                "⚠️ Iltimos, kanal/guruhdan xabarni forward qiling yoki username/ID sini yuboring."
             )
             return
-
-        # Bot admin ekanligini tekshirish
-        is_admin = await is_bot_admin(context.bot, channel_info['id'])
-
-        if not is_admin:
-            await update.message.reply_text(
-                f"❌ Bot \"{channel_info['title']}\" kanalida admin emas!\n\n"
-                "Kanal qo'shish uchun:\n"
-                "1. Botni kanalga qo'shing\n"
-                "2. Botga admin huquqini bering\n"
-                "3. Qayta urinib ko'ring"
-            )
-            return
-
-        # Ma'lumotlarni saqlash
-        context.user_data['channel_id'] = channel_info['id']
-        context.user_data['channel_username'] = channel_info['username']
-        context.user_data['channel_name'] = channel_info['title']
-        context.user_data['state'] = "WAITING_FOR_CONFIRM_CHANNEL"
-
-        confirm_btns = [
-            [
-                InlineKeyboardButton(text='✅ Tasdiqlash', callback_data='confirm_channel_add'),
-                InlineKeyboardButton(text='❌ Bekor qilish', callback_data='reject_channel_add')
-            ]
-        ]
-
-        confirm_keyboard = InlineKeyboardMarkup(confirm_btns)
-
-        await update.message.reply_text(
-            f"✅ Bot kanalda admin!\n\n"
-            f"📢 Kanal: {channel_info['title']}\n"
-            f"🆔 ID: {channel_info['id']}\n"
-            f"👤 Username: {'@' + channel_info['username'] if channel_info['username'] else 'mavjud emas'}\n\n"
-            "Tasdiqlaysizmi?",
-            reply_markup=confirm_keyboard
-        )
 
     elif state == "WAITING_REFERRAL_LOOKUP_ID":
         raw = update.message.text.strip()

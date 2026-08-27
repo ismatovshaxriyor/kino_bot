@@ -32,15 +32,18 @@ async def increase_ai_usage(user: User):
 @user_registered_required
 @channel_subscription_required
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message:
         return
 
     state = context.user_data.get('state')
 
     if state and state not in ["SEARCH_BY_NAME", "CHAT_WITH_AI"]:
-        # Admin/manager text states are handled in admins.common_handler
+        # Admin/manager text yoki forward qilingan xabarlar admins.common_handler da ishlanadi
         from admins.common_handler import general_message_handler
         await general_message_handler(update, context)
+        return
+
+    if not update.message.text:
         return
 
     if state == "SEARCH_BY_NAME":

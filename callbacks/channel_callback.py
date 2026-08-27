@@ -19,10 +19,13 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['state'] = "WAITING_CHANNEL_USERNAME"
 
         await update.effective_message.reply_text(
-            "Kanal username yoki ID kiriting:\n\n"
-            "📌 Misol:\n"
-            "• @kanal_nomi\n"
-            "• -100xxxxxxxxxx (kanal ID)"
+            "📢 <b>Kanal yoki guruh qo'shish:</b>\n\n"
+            "Quyidagi usullardan biri orqali qo'shishingiz mumkin:\n"
+            "1️⃣ Kanal yoki guruhdan biror xabarni shu yerga <b>forward (uzatish)</b> qiling <i>(eng osoni)</i>\n"
+            "2️⃣ Username yoki ID sini yuboring (masalan: <code>@kanal_nomi</code> yoki <code>-100xxxxxxxxxx</code>)\n\n"
+            "⚠️ <i>Eslatma: Avval botni o'sha kanal yoki guruhga qo'shib, <b>admin</b> huquqini bering!</i>\n\n"
+            "❌ Bekor qilish: /cancel",
+            parse_mode="HTML"
         )
 
     elif data_sp[1] == 'delete':

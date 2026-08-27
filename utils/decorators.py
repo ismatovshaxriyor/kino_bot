@@ -44,6 +44,13 @@ def channel_subscription_required(func):
             # Kanallar yo'q bo'lsa, tekshiruvsiz o'tkazish
             return await func(update, context, *args, **kwargs)
 
+        # Admin yoki managerlar majburiy a'zolik tekshiruvidan ozod
+        from database import User
+        from database.user_model import USER_TYPE
+        user = await User.get_or_none(telegram_id=user_id)
+        if user_id in (ADMIN_ID, MANAGER_ID) or (user and user.user_type == USER_TYPE.ADMIN):
+            return await func(update, context, *args, **kwargs)
+
         # Har bir kanal uchun Telegram API so'rovi tarmoq orqali ketadi —
         # ketma-ket (sequential) tekshirish kanallar soni ortgani sayin har
         # bir foydalanuvchi amalini chiziqli sekinlashtiradi. Parallel

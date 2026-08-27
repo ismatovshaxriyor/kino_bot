@@ -71,8 +71,8 @@ def main():
     bot.add_handler(MessageHandler(filters.Regex(r"🤖 AI yordamchi") & private_filter, ai_assistant_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"🤝 Do'stlarni taklif qilish") & private_filter, referral_handler))
 
-    bot.add_handler(MessageHandler(filters.Document.ALL & private_filter, restore_receive_file_handler))
-    bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_filter, message_handler))
+    bot.add_handler(MessageHandler(filters.Document.ALL & ~filters.FORWARDED & private_filter, restore_receive_file_handler))
+    bot.add_handler(MessageHandler((filters.TEXT | filters.FORWARDED) & ~filters.COMMAND & private_filter, message_handler))
 
     # Callbacks
     bot.add_handler(CallbackQueryHandler(ls_list_page_callback, pattern=r"^ls:list_page_"))

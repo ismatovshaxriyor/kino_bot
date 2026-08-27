@@ -76,7 +76,8 @@ async def get_channel_info(bot: Bot, channel_input: str) -> dict | None:
         return {
             "id": chat.id,
             "title": chat.title,
-            "username": chat.username
+            "username": chat.username,
+            "type": str(getattr(chat, "type", "channel")),
         }
     except TelegramError as e:
         logger.warning("Kanal ma'lumotini olishda xato: %s", e)
