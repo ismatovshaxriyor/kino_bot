@@ -60,9 +60,15 @@ async def _process_channel_addition(
         )
         return
 
+    from utils.checker import ensure_channel_invite_link
+    invite_link = None
+    if not chat_username:
+        invite_link = await ensure_channel_invite_link(context.bot, chat_id)
+
     context.user_data['channel_id'] = chat_id
     context.user_data['channel_username'] = chat_username
     context.user_data['channel_name'] = chat_title
+    context.user_data['channel_invite_link'] = invite_link
     context.user_data['state'] = "WAITING_FOR_CONFIRM_CHANNEL"
 
     confirm_btns = [
@@ -73,12 +79,14 @@ async def _process_channel_addition(
     ]
     confirm_keyboard = InlineKeyboardMarkup(confirm_btns)
     username_text = f"@{chat_username}" if chat_username else "mavjud emas (yopiq)"
+    link_info = f"🔗 <b>Taklif havolasi:</b> {invite_link}\n" if invite_link else ""
 
     await update.message.reply_text(
         f"✅ Bot {chat_type_label} admin!\n\n"
         f"📢 <b>{chat_type_title}:</b> {escape(chat_title)}\n"
         f"🆔 <b>ID:</b> <code>{chat_id}</code>\n"
-        f"👤 <b>Username:</b> {username_text}\n\n"
+        f"👤 <b>Username:</b> {username_text}\n"
+        f"{link_info}\n"
         f"Ushbu {chat_type_title.lower()}ni majburiy a'zolikka qo'shishni tasdiqlaysizmi?",
         reply_markup=confirm_keyboard,
         parse_mode="HTML",

@@ -65,18 +65,24 @@ def channel_subscription_required(func):
 
         if not_subscribed:
             # A'zo bo'lmagan kanallar ro'yxatini ko'rsatish
+            from utils.checker import get_channel_url
+            channel_urls = await asyncio.gather(*(
+                get_channel_url(context.bot, ch)
+                for ch in not_subscribed
+            ))
             btns = []
-            for ch in not_subscribed:
-                url = f"https://t.me/{ch.username}" if ch.username else f"https://t.me/c/{str(ch.channel_id)[4:]}"
+            for ch, url in zip(not_subscribed, channel_urls):
                 btns.append([InlineKeyboardButton(f"📢 {ch.name}", url=url)])
 
             btns.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
             keyboard = InlineKeyboardMarkup(btns)
 
             await update.message.reply_text(
-                "⚠️ Botdan foydalanish uchun quyidagi kanallarga a'zo bo'ling:\n\n"
-                "A'zo bo'lgandan so'ng \"✅ Tekshirish\" tugmasini bosing.",
-                reply_markup=keyboard
+                "⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga a'zo bo'ling:</b>\n\n"
+                "<i>(Agar kanal yoki guruh yopiq bo'lsa, unga qo'shilish so'rovi yuboring)</i>\n\n"
+                "A'zo bo'lgach yoki so'rov yuborgach, pastdagi <b>\"✅ Tekshirish\"</b> tugmasini bosing.",
+                reply_markup=keyboard,
+                parse_mode="HTML",
             )
             return None
 

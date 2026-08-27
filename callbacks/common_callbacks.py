@@ -199,6 +199,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     channel_id = context.user_data.pop('channel_id')
                     channel_name = context.user_data.pop('channel_name')
                     channel_username = context.user_data.pop('channel_username', None)
+                    channel_invite_link = context.user_data.pop('channel_invite_link', None)
                     context.user_data.pop('state')
 
                     existing_channel = await Channels.get_or_none(channel_id=channel_id)
@@ -209,7 +210,8 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await Channels.create(
                             channel_id=channel_id,
                             name=channel_name,
-                            username=channel_username if channel_username else ""
+                            username=channel_username if channel_username else "",
+                            invite_link=channel_invite_link if channel_invite_link else None,
                         )
                         keyboard, i = await get_channel_btns()
                         await query.edit_message_text("✅ Yangi kanal qo'shildi!", reply_markup=keyboard)
@@ -220,6 +222,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data.pop('channel_id', None)
                 context.user_data.pop('channel_name', None)
                 context.user_data.pop('channel_username', None)
+                context.user_data.pop('channel_invite_link', None)
                 context.user_data.pop('state', None)
                 await query.edit_message_text("❌ Kanal qo'shish bekor qilindi.", reply_markup=keyboard)
 

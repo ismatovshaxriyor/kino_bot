@@ -66,8 +66,19 @@ async def ensure_search_index():
         logger.warning("⚠️ pg_trgm indeksini yaratib bo'lmadi (huquq yetishmasligi mumkin): %s", e)
 
 
+async def ensure_schema():
+    """Bazada yangi qo'shilgan ustunlarni (masalan channels.invite_link) tekshirish va yaratish."""
+    conn = Tortoise.get_connection("default")
+    try:
+        await conn.execute_query('ALTER TABLE "channels" ADD COLUMN IF NOT EXISTS "invite_link" TEXT;')
+        logger.info("✅ channels.invite_link ustuni tekshirildi/yaratildi")
+    except Exception as e:
+        logger.warning("⚠️ channels.invite_link ustunini tekshirishda xato: %s", e)
+
+
 async def post_init(application):
     await init_db()
+    await ensure_schema()
     await ensure_search_index()
 
     # Bot komandalarini sozlash

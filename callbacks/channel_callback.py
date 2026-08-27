@@ -86,10 +86,13 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]
                 keyboard = InlineKeyboardMarkup(btns)
                 username_text = f"@{channel.username}" if channel.username else "yo'q"
+                from utils.checker import get_channel_url
+                channel_link = await get_channel_url(context.bot, channel)
                 await query.edit_message_text(
                     f"📢 <b>Kanal:</b> {escape(channel.name)}\n"
-                    f"🆔 <b>ID:</b> {channel.channel_id}\n"
+                    f"🆔 <b>ID:</b> <code>{channel.channel_id}</code>\n"
                     f"👤 <b>Username:</b> {username_text}\n"
+                    f"🔗 <b>Havola:</b> {channel_link}\n"
                     f"{status_text}\n\n"
                     "Harakatni tanlang:",
                     reply_markup=keyboard,
@@ -126,18 +129,24 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     ]
 
     if not_subscribed:
+        from utils.checker import get_channel_url
+        channel_urls = await asyncio.gather(*(
+            get_channel_url(context.bot, ch)
+            for ch in not_subscribed
+        ))
         btns = []
-        for ch in not_subscribed:
-            url = f"https://t.me/{ch.username}" if ch.username else f"https://t.me/c/{str(ch.channel_id)[4:]}"
+        for ch, url in zip(not_subscribed, channel_urls):
             btns.append([InlineKeyboardButton(f"📢 {ch.name}", url=url)])
 
         btns.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
         keyboard = InlineKeyboardMarkup(btns)
 
         await query.edit_message_text(
-            "⚠️ Siz hali barcha kanallarga a'zo bo'lmadingiz!\n\n"
-            "Quyidagi kanallarga a'zo bo'ling:",
-            reply_markup=keyboard
+            "⚠️ <b>Siz hali barcha kanallarga a'zo bo'lmadingiz!</b>\n\n"
+            "Quyidagi kanallarga a'zo bo'ling yoki <b>qo'shilish so'rovi</b> yuboring, "
+            "so'ngra <b>\"✅ Tekshirish\"</b> tugmasini bosing:",
+            reply_markup=keyboard,
+            parse_mode="HTML",
         )
     else:
         # Har bir kanal uchun "bot orqali tasdiqlangan obunachi" hodisasini
