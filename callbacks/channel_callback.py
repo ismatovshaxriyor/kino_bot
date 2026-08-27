@@ -157,6 +157,18 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             for channel in channels
         ))
 
+        pending_movie = context.user_data.pop('pending_movie', None)
+        if pending_movie:
+            from handlers.inline_query_handler import inline_movie_command_handler
+            await query.edit_message_text(
+                "✅ Ajoyib! Siz barcha kanallarga a'zo bo'ldingiz!\n\n"
+                "🎬 Kinoni yuklayapmiz...",
+                parse_mode="HTML"
+            )
+            context.args = [pending_movie]
+            await inline_movie_command_handler(update, context)
+            return
+
         await query.edit_message_text(
             "✅ Ajoyib! Siz barcha kanallarga a'zo bo'ldingiz!\n\n"
             "Endi botdan foydalanishingiz mumkin. /start bosing."

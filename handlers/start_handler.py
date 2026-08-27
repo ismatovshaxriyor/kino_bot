@@ -29,17 +29,13 @@ def _start_caption(first_name: str, created: bool) -> str:
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Referal kodini (agar bo'lsa) obuna tekshiruvidan oldin saqlab qo'yamiz.
-
-    Kanalga a'zo bo'lmagan foydalanuvchi "ref_<id>" payloadi bilan birinchi
-    marta /start bossa, @channel_subscription_required uni bloklaydi va
-    asosiy funksiya (_start_handler_impl) ishga tushmaydi — payload
-    yo'qoladi. A'zo bo'lib qaytadan /start bosganda esa payload endi yo'q
-    (Telegram uni faqat bitta chaqiriqda beradi). Shu sabab kodni
-    user_data'ga saqlab, keyingi (argumentsiz) /start'da ham ishlata olamiz.
-    """
-    if context.args and context.args[0].startswith("ref_"):
-        context.user_data['pending_ref'] = context.args[0]
+    """Referal kodi yoki kino kodini obuna tekshiruvidan oldin saqlab qo'yamiz."""
+    if context.args:
+        first_arg = context.args[0]
+        if first_arg.startswith("ref_"):
+            context.user_data['pending_ref'] = first_arg
+        elif first_arg.isdecimal():
+            context.user_data['pending_movie'] = first_arg
 
     return await _start_handler_impl(update, context)
 
@@ -52,6 +48,7 @@ async def _start_handler_impl(update: Update, context: ContextTypes.DEFAULT_TYPE
     telegram_id = update.effective_chat.id
 
     pending_ref = context.user_data.get('pending_ref')
+    pending_movie = context.user_data.get('pending_movie')
 
     # Barcha statelarni to'liq tozalash
     context.user_data.clear()
@@ -74,8 +71,10 @@ async def _start_handler_impl(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         user, created = await User.get_or_create(telegram_id=telegram_id, defaults=defaults)
 
-        if context.args and context.args[0].isdecimal():
+        movie_arg = (context.args[0] if context.args and context.args[0].isdecimal() else None) or pending_movie
+        if movie_arg:
             from handlers.inline_query_handler import inline_movie_command_handler
+            context.args = [movie_arg]
             return await inline_movie_command_handler(update, context)
 
         inline_keyboard = InlineKeyboardMarkup([

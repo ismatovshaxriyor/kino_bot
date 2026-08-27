@@ -37,6 +37,8 @@ async def is_user_subscribed(bot: Bot, user_id: int, channel) -> bool:
             member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
             if member.status in ("member", "administrator", "creator", "restricted"):
                 return True
+            if member.status == "kicked":
+                return False
         except TelegramError as e:
             logger.warning("Foydalanuvchi a'zoligini tekshirishda xato (%s): %s", chat_id, e)
 

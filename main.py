@@ -1,7 +1,10 @@
 import logging
 
 from admins import get_channels
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ChatJoinRequestHandler, InlineQueryHandler, MessageHandler, filters
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, ChatJoinRequestHandler,
+    ChatMemberHandler, InlineQueryHandler, MessageHandler, filters,
+)
 from telegram import Update
 
 from handlers import *
@@ -35,6 +38,7 @@ def main():
     bot.add_handler(CommandHandler("top", top_handler))
     bot.add_handler(InlineQueryHandler(inline_query_handler))
     bot.add_handler(ChatJoinRequestHandler(channel_join_request_handler))
+    bot.add_handler(ChatMemberHandler(channel_chat_member_handler, ChatMemberHandler.CHAT_MEMBER))
 
     bot.add_handler(add_movie_conf_handler)
     bot.add_handler(edit_movie_handler)
