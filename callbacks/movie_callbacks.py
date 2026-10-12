@@ -32,7 +32,7 @@ async def movie_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             f"🎬 <b>{movie.movie_name}</b>\n\n"
             f"🔢 <b>Kodi:</b> {movie.movie_code}\n"
-            f"📅 <b>Yili:</b> {movie.movie_year}\n"
+            f"📅 <b>Yili:</b> {movie.movie_year or 'Nomalum'}\n"
             f"🎭 <b>Janr:</b> {genres_text}\n"
             f"🌍 <b>Davlat:</b> {countries_text}\n"
             f"⏱ <b>Davomiylik:</b> {movie.duration_formatted}\n"

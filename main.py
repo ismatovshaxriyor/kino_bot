@@ -41,6 +41,7 @@ def main():
     bot.add_handler(ChatMemberHandler(channel_chat_member_handler, ChatMemberHandler.CHAT_MEMBER))
 
     bot.add_handler(add_movie_conf_handler)
+    bot.add_handler(quick_add_movie_handler)
     bot.add_handler(edit_movie_handler)
     bot.add_handler(linked_series_add_handler)
     bot.add_handler(linked_series_edit_handler)

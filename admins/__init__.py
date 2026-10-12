@@ -5,6 +5,7 @@ from .country_handlers import *
 from .managers_handler import *
 from .movie_handlers import *
 from .add_movie import *
+from .quick_add_movie import *
 from .channel_handlers import *
 from .edit_movie_handler import *
 from .linked_series_handler import *

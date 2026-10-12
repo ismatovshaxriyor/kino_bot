@@ -32,7 +32,8 @@ def get_movies_keyboard(movies, page, has_prev, has_next):
         buttons.append(nav_btns)
 
     buttons.append([
-        InlineKeyboardButton("➕ Kino qo'shish", callback_data="movie:add")
+        InlineKeyboardButton("➕ Kino qo'shish", callback_data="movie:add"),
+        InlineKeyboardButton("⚡ Tezkor qo'shish", callback_data="movie:quick_add"),
     ])
 
     return InlineKeyboardMarkup(buttons)
