@@ -12,7 +12,7 @@ from telegram.ext import ConversationHandler, CallbackQueryHandler, MessageHandl
 from utils import admin_required, error_notificator
 from utils.admin_btns import get_admin_keyboard
 from database import Movie
-from admins.add_movie import validate_movie_code, cancel_command, start_from_conv
+from admins.add_movie import validate_movie_code, cancel_command, start_from_conv, DEFAULT_LANGUAGE
 
 
 QUICK_CODE, QUICK_NAME, QUICK_DESCRIPTION, QUICK_VIDEO, QUICK_SAVE = range(5)
@@ -57,7 +57,8 @@ async def quick_add_movie_callback(update: Update, context: ContextTypes.DEFAULT
     await _ask(
         update, context,
         "⚡ <b>Tezkor kino qo'shish</b>\n\n"
-        "Faqat asosiy ma'lumotlar so'raladi. Janr, davlat, yil, sifat va tilni "
+        "Faqat asosiy ma'lumotlar so'raladi, til avtomatik «O'zbek tilida» bo'ladi. "
+        "Janr, davlat, yil va sifatni "
         "keyinroq ✏️ Tahrirlash orqali qo'shishingiz mumkin.\n\n"
         "✍️ <b>Kino kodini kiriting:</b>",
         reply_markup=ReplyKeyboardRemove(),
@@ -143,6 +144,7 @@ async def quick_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚡ <b>Kino ma'lumotlarini tekshiring</b>\n\n"
         f"🏷 <b>Nomi:</b> {escape(context.user_data['movie_name'])}\n"
         f"🔢 <b>Kodi:</b> {escape(context.user_data['movie_code'])}\n"
+        f"🗣 <b>Tili:</b> {DEFAULT_LANGUAGE.value}\n"
         f"📝 <b>Kino haqida:</b> {description_text}\n\n"
         f"Tasdiqlaysizmi?"
     )
@@ -188,6 +190,7 @@ async def quick_save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_id=context.user_data['file_id'],
             movie_name=context.user_data['movie_name'],
             movie_description=context.user_data.get('movie_description'),
+            movie_language=DEFAULT_LANGUAGE,
         )
     except Exception as e:
         await error_notificator.notify(context, e, update)

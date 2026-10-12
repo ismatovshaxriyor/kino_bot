@@ -7,7 +7,10 @@ from utils.admin_btns import get_admin_keyboard
 from database import Movie, Genre, Countries, QualityEnum, LanguageEnum
 
 
-ADD_MOVIE, GET_CODE, GET_NAME, GET_GENRE, GET_COUNTRY, GET_YEAR, GET_QUALITY, GET_LANGUAGE, GET_DURATION, GET_DESCRIPTION, SAVE_DATA = range(11)
+ADD_MOVIE, GET_CODE, GET_NAME, GET_GENRE, GET_COUNTRY, GET_YEAR, GET_LANGUAGE, GET_DURATION, GET_DESCRIPTION, SAVE_DATA = range(10)
+
+# Barcha kinolar o'zbek tilida — til so'ralmaydi, kerak bo'lsa ✏️ Tahrirlash orqali o'zgartiriladi
+DEFAULT_LANGUAGE = LanguageEnum.UZBEK
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -390,48 +393,6 @@ async def get_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['quality'] = quality
 
-    language_btn = [
-        [
-            InlineKeyboardButton(
-                text=language.value,
-                callback_data=f"language:{language.value}"
-            )
-        ]
-        for language in LanguageEnum
-    ]
-
-    keyboard = InlineKeyboardMarkup(language_btn)
-
-    msg = await context.bot.send_message(
-        update.effective_chat.id,
-        "🗣 <b>Kino tilini tanlang:</b>",
-        reply_markup=keyboard,
-        parse_mode="HTML",
-        direct=True,  # type: ignore
-    )
-    if msg:
-        context.user_data['last_msg'] = msg.message_id
-    return GET_QUALITY
-
-
-async def get_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    _, language = query.data.split(":")
-
-    try:
-        last_msg = context.user_data.get('last_msg')
-        if last_msg:
-            await context.bot.delete_message(update.effective_chat.id, last_msg)
-    except Exception as e:
-        await error_notificator.notify(context, e, update)
-
-    if update.message:
-        await update.message.delete()
-
-    context.user_data['language'] = language
-
     msg = await context.bot.send_message(
         update.effective_chat.id,
         "⏱ <b>Kino davomiyligini kiriting (minutlarda):</b>\n\nBo'sh qoldirish uchun <code>.</code> yuboring.",
@@ -579,7 +540,7 @@ async def get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌍 <b>Davlatlar:</b> {escape(countries_name or 'Tanlanmagan')}\n"
         f"📅 <b>Yili:</b> {escape(str(context.user_data['movie_year']))}\n"
         f"📺 <b>Sifati:</b> {escape(str(context.user_data.get('quality')))}\n"
-        f"🗣 <b>Tili:</b> {escape(str(context.user_data['language']))}\n"
+        f"🗣 <b>Tili:</b> {DEFAULT_LANGUAGE.value}\n"
         f"⏱ <b>Davomiyligi:</b> {duration_text}\n"
         f"📝 <b>Kino haqida:</b> {description_text}\n\n"
         f"Tasdiqlaysizmi?"
@@ -624,7 +585,7 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 movie_duration=int(duration) if str(duration).isdecimal() else None,
                 movie_description=description if description != '.' else None,
                 movie_quality=context.user_data.get('quality'),
-                movie_language=context.user_data.get('language')
+                movie_language=DEFAULT_LANGUAGE,
             )
 
             genre_ids = context.user_data.get('genres', [])
@@ -676,7 +637,6 @@ add_movie_conf_handler = ConversationHandler(
         GET_GENRE: [CallbackQueryHandler(get_country, pattern=r"movie:country:")],
         GET_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_year)],
         GET_YEAR: [CallbackQueryHandler(get_quality, pattern=r"quality:")],
-        GET_QUALITY: [CallbackQueryHandler(get_language, pattern=r"language:")],
         GET_LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_duration)],
         GET_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_description)],
         GET_DESCRIPTION: [MessageHandler(filters.VIDEO | filters.Document.ALL, get_video)],
