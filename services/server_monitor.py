@@ -1,7 +1,8 @@
 """Server va AWS kuzatuvi.
 
 - Server: disk, RAM, Postgres, Redis va worker navbati (har 15 daqiqada).
-- AWS: Cost Explorer orqali kredit sarfi va qolgan kunlar (sutkada 1 marta) — faqat o'qish kaliti bilan.
+- AWS: Cost Explorer orqali kredit sarfi va qolgan kunlar (har kuni 09:00) — faqat o'qish kaliti bilan.
+  Kredit kam qolgan bo'lsa har kuni eslatadi.
 
 Ogohlantirishlar ADMIN_ID ga `direct=True` bilan yuboriladi, shuning uchun Redis/worker
 yiqilgan bo'lsa ham yetib boradi. Muammo holati xotirada saqlanadi: bir xil muammo har safar emas,
@@ -12,8 +13,9 @@ import asyncio
 import logging
 import shutil
 import time
-from datetime import date, timedelta
+from datetime import date, time as dtime, timedelta
 from html import escape
+from zoneinfo import ZoneInfo
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -29,15 +31,17 @@ logger = logging.getLogger(__name__)
 
 HEALTH_INTERVAL = timedelta(minutes=15)
 # Cost Explorer so'rovi pullik (~$0.01) — sutkada bir marta yetarli
-AWS_INTERVAL = timedelta(hours=24)
+AWS_CHECK_TIME = dtime(hour=9, minute=0, tzinfo=ZoneInfo("Asia/Tashkent"))
 
 DISK_WARN_PERCENT = 85
 MEM_MIN_AVAILABLE_MB = 150
 QUEUE_MAX_LEN = 500
 REALERT_AFTER = 6 * 3600          # davom etayotgan muammo haqida qayta eslatish (soniya)
 
-CREDIT_THRESHOLDS_DAYS = (30, 14, 7, 3, 1)
-CREDIT_REDIS_KEY = "monitor:credit_threshold"
+# Kredit "kam qoldi" deb hisoblanadi: shu kundan kam yetsa YOKI qolgan summa boshlang'ichning shu ulushidan kam bo'lsa
+CREDIT_LOW_DAYS = 30
+CREDIT_LOW_FRACTION = 0.2
+CREDIT_URGENT_DAYS = 7            # shundan kam qolsa — 🚨
 AWS_CACHE_TTL = 30 * 60           # /aws buyrug'i uchun kesh (soniya)
 
 _active: dict[str, float] = {}    # muammo kaliti -> oxirgi ogohlantirish vaqti
@@ -169,7 +173,7 @@ def _ce_costs_sync() -> dict:
         return out
 
     # Kredit manfiy summa sifatida keladi
-    credits_used = -totals_by_record_type(start, today + timedelta(days=1), "MONTHLY").get("Credit", 0.0)
+    credits_used = max(-totals_by_record_type(start, today + timedelta(days=1), "MONTHLY").get("Credit", 0.0), 0.0) + 0.0  # "-0.0" chiqmasin
     week = totals_by_record_type(today - timedelta(days=7), today, "DAILY")
     gross_week = sum(v for k, v in week.items() if k not in ("Credit", "Refund"))
     return {"credits_used": credits_used, "avg_daily": gross_week / 7}
@@ -212,8 +216,15 @@ def format_aws(s: dict) -> str:
     return "\n".join(lines)
 
 
+def credit_is_low(status: dict) -> bool:
+    days, remaining = status["days_left"], status["remaining"]
+    if days is not None and days <= CREDIT_LOW_DAYS:
+        return True
+    return bool(AWS_CREDIT_TOTAL_USD and remaining is not None and remaining <= AWS_CREDIT_TOTAL_USD * CREDIT_LOW_FRACTION)
+
+
 async def aws_check_job(context: ContextTypes.DEFAULT_TYPE):
-    """JobQueue: kredit tugashiga yaqinlashganda (30/14/7/3/1 kun) ogohlantirish."""
+    """JobQueue (har kuni): kredit kam qolgan bo'lsa HAR KUNI eslatish."""
     bot = context.bot
     try:
         status = await fetch_aws_status(force=True)
@@ -223,21 +234,12 @@ async def aws_check_job(context: ContextTypes.DEFAULT_TYPE):
         return
     await _sync_problems(bot, "aws:", {})
 
-    days = status["days_left"]
-    if days is None:
+    if not credit_is_low(status):
         return
-    threshold = min((t for t in CREDIT_THRESHOLDS_DAYS if days <= t), default=None)
-    try:
-        if threshold is None:
-            await r.delete(CREDIT_REDIS_KEY)  # kredit yetarli — keyingi pasayish uchun qayta tayyor
-            return
-        last = await r.get(CREDIT_REDIS_KEY)
-        if last is not None and threshold >= int(last):
-            return  # bu chegara haqida allaqachon xabar berilgan
-        await r.set(CREDIT_REDIS_KEY, threshold)
-    except Exception as e:
-        logger.error("Kredit chegarasini Redis'da saqlab bo'lmadi: %s", e)
-    await _send(bot, f"⚠️ <b>AWS kredit {threshold} kundan kam qoldi</b>\n\n{format_aws(status)}")
+    days = status["days_left"]
+    urgent = days is not None and days <= CREDIT_URGENT_DAYS
+    title = "🚨 <b>AWS kredit tugash arafasida!</b>" if urgent else "⚠️ <b>AWS kredit kam qoldi</b>"
+    await _send(bot, f"{title}\n\n{format_aws(status)}")
 
 
 # ============================= BUYRUQ + RO'YXATGA OLISH =============================
@@ -271,7 +273,7 @@ def register_monitor_jobs(job_queue) -> None:
     job_queue.run_repeating(health_check_job, interval=HEALTH_INTERVAL, first=60, name="server_health")
     logger.info("✅ Server monitori rejalashtirildi (har %s daqiqa)", int(HEALTH_INTERVAL.total_seconds() // 60))
     if AWS_MONITOR_ENABLED:
-        job_queue.run_repeating(aws_check_job, interval=AWS_INTERVAL, first=120, name="aws_cost")
-        logger.info("✅ AWS kredit monitori rejalashtirildi (sutkada 1 marta)")
+        job_queue.run_daily(aws_check_job, time=AWS_CHECK_TIME, name="aws_cost")
+        logger.info("✅ AWS kredit monitori rejalashtirildi (har kuni 09:00 Toshkent)")
     else:
         logger.info("AWS kuzatuvi o'chiq (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY yo'q)")

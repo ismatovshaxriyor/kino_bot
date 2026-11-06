@@ -8,7 +8,7 @@ ogohlantirishlar `ADMIN_ID` ga Telegram orqali, **Redis/worker'siz** (`direct=Tr
 | Disk ≥ 85%, bo'sh RAM < 150 MB | har 15 daqiqa | 🚨 paydo bo'lganda, 6 soatdan keyin eslatma, ✅ tiklanganda |
 | Postgres / Redis javob bermasa | har 15 daqiqa | 🚨 / ✅ |
 | Worker navbati > 500 | har 15 daqiqa | 🚨 (worker ishlamayapti) |
-| AWS kredit tugashiga 30/14/7/3/1 kun | sutkada 1 marta | ⚠️ har chegara uchun bir marta |
+| AWS kredit kam qolsa (≤ 30 kunga yetadi yoki qolgan ≤ 20%) | har kuni 09:00 (Toshkent) | ⚠️ **har kuni** eslatadi; ≤ 7 kun qolsa 🚨 |
 
 `/aws` buyrug'i (faqat `ADMIN_ID`/`MANAGER_ID`, shaxsiy chatda) server va kredit holatini
 darhol ko'rsatadi (AWS qismi 30 daqiqa keshlanadi).
@@ -49,8 +49,9 @@ AWS kaliti serverga qo'yilgani uchun **minimal huquqli** alohida IAM foydalanuvc
 - **Sarflangan kredit** = `AWS_CREDIT_START` dan beri Cost Explorer'dagi `Credit` yozuvlari yig'indisi.
 - **Qolgan** = `AWS_CREDIT_TOTAL_USD` − sarflangan.
 - **Balans yetadi** = qolgan / oxirgi 7 kunlik o'rtacha kunlik xarajat (kredit hisobga olinmagan).
-- Ogohlantirish **kichikroq** qiymat bo'yicha beriladi: balans yetadigan kun yoki
-  `AWS_CREDIT_EXPIRES` gacha qolgan kun.
+- "Kam qoldi" sharti: balans yetadigan kun yoki `AWS_CREDIT_EXPIRES` gacha qolgan kun (**kichigi**) ≤ 30,
+  yoki qolgan summa boshlang'ich kreditning ≤ 20% i. Shu holat davom etar ekan, har kuni 09:00 da eslatma keladi.
+- Kredit yetarli bo'lsa (yuqoridagi shartlar bajarilmasa) bot jim turadi; `/aws` bilan istalgan payt ko'rasiz.
 - Cost Explorer ma'lumoti **24 soatgacha kechikadi**; hisob taxminiy.
 
 ## Narx
