@@ -36,6 +36,17 @@ async def _process_channel_addition(
     from database import Channels
     from utils.checker import is_bot_admin
 
+    if str(chat_type).lower() == "private":
+        await update.message.reply_text(
+            "⚠️ <b>Bu shaxsiy foydalanuvchi, kanal yoki guruh emas!</b>\n\n"
+            "Iltimos, kanal yoki guruhning username/ID sini yuboring yoki undan xabar forward qiling.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Ba'zi chatlarda title bo'lmaydi (None) — nomsiz holda ham ishlashi uchun
+    chat_title = chat_title or (f"@{chat_username}" if chat_username else str(chat_id))
+
     existing = await Channels.get_or_none(channel_id=chat_id)
     if existing:
         await update.message.reply_text(

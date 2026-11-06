@@ -2,6 +2,8 @@ from telegram.ext import ConversationHandler, CallbackQueryHandler, MessageHandl
 from telegram import Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from html import escape
 
+from tortoise.exceptions import IntegrityError
+
 from utils import admin_required, error_notificator
 from utils.admin_btns import get_admin_keyboard
 from database import Movie, Genre, Countries, QualityEnum, DEFAULT_LANGUAGE
@@ -604,9 +606,25 @@ async def save_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.clear()
             return ConversationHandler.END
 
+        except IntegrityError:
+            code = context.user_data.get('movie_code')
+            await query.message.reply_text(
+                f"❌ <b>{escape(str(code))}</b> kodi band — shu vaqt ichida boshqa kinoga biriktirilgan.\n\n"
+                "Boshqa kod bilan qaytadan boshlang.",
+                reply_markup=get_admin_keyboard(update.effective_chat.id),
+                parse_mode="HTML",
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
         except Exception as e:
-
             await error_notificator.notify(context, e, update)
+            await query.message.reply_text(
+                "⚠️ <b>Kinoni saqlashda xatolik yuz berdi.</b> Qaytadan urinib ko'ring.",
+                reply_markup=get_admin_keyboard(update.effective_chat.id),
+                parse_mode="HTML",
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
 
     elif action == 'reject':
         await query.message.reply_text(

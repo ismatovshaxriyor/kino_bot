@@ -79,10 +79,17 @@ def channel_subscription_required(func):
             btns.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
             keyboard = InlineKeyboardMarkup(btns)
 
-            await update.message.reply_text(
-                "⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga a'zo bo'ling:</b>\n\n"
-                "<i>(Agar kanal yoki guruh yopiq bo'lsa, unga qo'shilish so'rovi yuboring)</i>\n\n"
-                "A'zo bo'lgach yoki so'rov yuborgach, pastdagi <b>\"✅ Tekshirish\"</b> tugmasini bosing.",
+            chat = update.effective_chat
+            if chat is None:
+                return None
+            if update.callback_query:
+                await update.callback_query.answer()
+            # update.message tahrirlangan xabar va callback'larda None bo'ladi — chat_id orqali yuboramiz
+            await context.bot.send_message(
+                chat_id=chat.id,
+                text="⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga a'zo bo'ling:</b>\n\n"
+                     "<i>(Agar kanal yoki guruh yopiq bo'lsa, unga qo'shilish so'rovi yuboring)</i>\n\n"
+                     "A'zo bo'lgach yoki so'rov yuborgach, pastdagi <b>\"✅ Tekshirish\"</b> tugmasini bosing.",
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )

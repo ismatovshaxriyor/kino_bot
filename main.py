@@ -78,7 +78,8 @@ def main():
 
     # Admin handlers
     # Admin handlers - Only Private
-    private_filter = filters.ChatType.PRIVATE
+    # Tahrirlangan xabarlar (edited_message) yangi buyruq sifatida qayta ishlanmasin
+    private_filter = filters.ChatType.PRIVATE & filters.UpdateType.MESSAGE
 
     bot.add_handler(MessageHandler(filters.Regex(r"🔐 Admin panel") & private_filter, admin_handler))
     bot.add_handler(MessageHandler(filters.Regex(r"📢 Janrlar") & private_filter, get_genres))
