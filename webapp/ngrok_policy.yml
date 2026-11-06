@@ -1,9 +1,0 @@
-# ngrok Traffic Policy: bepul tarifdagi "You are about to visit... Visit Site" sahifasini o'chiradi.
-# ngrok har bir so'rovga `ngrok-skip-browser-warning` sarlavhasini o'zi qo'shadi (Telegram ichida sarlavhani qo'lda yuborib bo'lmaydi).
-on_http_request:
-  - name: skip-browser-warning
-    actions:
-      - type: add-headers
-        config:
-          headers:
-            ngrok-skip-browser-warning: "1"

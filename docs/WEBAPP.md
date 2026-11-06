@@ -35,7 +35,7 @@ Botda `/panel` yoki chat menyusidagi «📊 Server» ni oching.
 
 ## Cheklovlar
 
-- ngrok bepul tarifida brauzer birinchi ochilganda «Visit Site» sahifasini ko'rsatadi — bir marta bosing.
+- ngrok bepul tarifida brauzer birinchi ochilganda «Visit Site» sahifasini ko'rsatadi (Traffic Policy bilan o'chirib bo'lmaydi). Doimiy domen bilan u bir marta chiqadi va cookie saqlanadi.
 - Havola ngrok qayta ishga tushganda o'zgaradi (avtomatik yangilanadi). O'zgarmas bo'lishi uchun ngrok dashboard'dan
   bepul domen oling: `NGROK_EXTRA=--url=nomi.ngrok-free.app` (skript so'raydi).
 - 24 soatlik tarix xotirada: panel qayta ishga tushsa tarix tozalanadi.
