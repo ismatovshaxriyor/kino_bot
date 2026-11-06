@@ -17,6 +17,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+# httpx har so'rovda URL'ni (ichida BOT_TOKEN bor) INFO darajasida yozadi — loglarda token oshkor bo'lmasin
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 apply_redis_patch()
