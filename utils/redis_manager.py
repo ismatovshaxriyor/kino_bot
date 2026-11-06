@@ -7,6 +7,7 @@ from telegram import Bot
 from telegram.error import BadRequest, RetryAfter, Forbidden
 from .settings import ADMIN_ID, MANAGER_ID, REDIS_URL
 from .shutdown_guard import lock_exists
+from .tg_request import make_request
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -303,7 +304,7 @@ async def _requeue(bot, msg: dict, *, reason: str) -> None:
 
 
 async def run_worker(bot_token: str):
-    bot = Bot(token=bot_token)
+    bot = Bot(token=bot_token, request=make_request())
     logger.info("🚀 Worker ishga tushdi (Full Mode)...")
 
     while True:

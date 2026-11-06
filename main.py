@@ -17,6 +17,7 @@ from services.shutdown_mode import (
     CONFIRM_PATTERN, maintenance_guard, shutdown_command_handler, shutdown_confirm_handler,
 )
 from utils.cache import register_channel_cache_signals
+from utils.tg_request import make_request
 from utils.shutdown_guard import hold_if_shutdown
 
 logging.basicConfig(
@@ -43,7 +44,7 @@ async def _post_init(application):
 
 
 def main():
-    bot = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
+    bot = Application.builder().token(BOT_TOKEN).request(make_request()).post_init(_post_init).build()
 
     bot.add_handler(CommandHandler('start', start_handler))
     bot.add_handler(CommandHandler("kino", inline_movie_command_handler))
