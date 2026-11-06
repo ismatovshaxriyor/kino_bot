@@ -4,13 +4,10 @@ from html import escape
 
 from utils import admin_required, error_notificator
 from utils.admin_btns import get_admin_keyboard
-from database import Movie, Genre, Countries, QualityEnum, LanguageEnum
+from database import Movie, Genre, Countries, QualityEnum, DEFAULT_LANGUAGE
 
 
 ADD_MOVIE, GET_CODE, GET_NAME, GET_GENRE, GET_COUNTRY, GET_YEAR, GET_LANGUAGE, GET_DURATION, GET_DESCRIPTION, SAVE_DATA = range(10)
-
-# Barcha kinolar o'zbek tilida — til so'ralmaydi, kerak bo'lsa ✏️ Tahrirlash orqali o'zgartiriladi
-DEFAULT_LANGUAGE = LanguageEnum.UZBEK
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1,14 +1,14 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 
-from database import Countries, Genre, LanguageEnum, Movie, QualityEnum
+from database import Countries, Genre, LanguageEnum, Movie, QualityEnum, DEFAULT_LANGUAGE
 from utils.decorators import admin_required
 from utils import error_notificator, get_movies_page
 from admins.movie_handlers import get_movies_keyboard
 
 SELECTING_ACTION, WAITING_INPUT, SELECTING_PART_ACTION, \
 WAITING_PART_YEAR, WAITING_PART_DESC, WAITING_PART_DURATION, \
-SELECTING_PART_QUALITY, SELECTING_PART_LANG = range(8)
+SELECTING_PART_QUALITY = range(7)
 EDIT_MENU_PATTERN = (
     r"^(cancel_edit$|delete_confirm$|delete_yes$|delete_no$|"
     r"edit_field_(name|year|code|duration|genres|countries|quality|lang|desc|file|parts)$|"
@@ -696,7 +696,7 @@ async def create_part_movie_helper(update: Update, context: ContextTypes.DEFAULT
         duration = context.user_data.get('new_part_duration')
         desc = context.user_data.get('new_part_desc')
         quality = context.user_data.get('new_part_quality')
-        lang = context.user_data.get('new_part_lang')
+        lang = DEFAULT_LANGUAGE
 
     # Yangi qism (Movie) yaratish
     new_part = await Movie.create(
@@ -789,23 +789,9 @@ async def select_part_quality_callback(update: Update, context: ContextTypes.DEF
         val = data.split("_", 3)[3]
         context.user_data['new_part_quality'] = val
 
-        btns = [[InlineKeyboardButton(l.value, callback_data=f"set_part_lang_{l.value}")] for l in LanguageEnum]
-        await query.edit_message_text("🗣 <b>Tilni tanlang:</b>", reply_markup=InlineKeyboardMarkup(btns), parse_mode="HTML")
-        return SELECTING_PART_LANG
-    return SELECTING_PART_QUALITY
-
-async def select_part_lang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    if data.startswith("set_part_lang_"):
-        val = data.split("_", 3)[3]
-        context.user_data['new_part_lang'] = val
-
         await query.edit_message_text("✅ Ma'lumotlar saqlandi. Qism yaratilmoqda...")
         return await create_part_movie_helper(update, context, copy_from_parent=False)
-    return SELECTING_PART_LANG
+    return SELECTING_PART_QUALITY
 
 
 async def cancel_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -833,7 +819,6 @@ edit_movie_handler = ConversationHandler(
         WAITING_PART_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_part_desc)],
         WAITING_PART_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_part_duration)],
         SELECTING_PART_QUALITY: [CallbackQueryHandler(select_part_quality_callback)],
-        SELECTING_PART_LANG: [CallbackQueryHandler(select_part_lang_callback)],
     },
     fallbacks=[CommandHandler('cancel', cancel_edit)],
 )

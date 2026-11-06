@@ -11,8 +11,8 @@ from telegram.ext import ConversationHandler, CallbackQueryHandler, MessageHandl
 
 from utils import admin_required, error_notificator
 from utils.admin_btns import get_admin_keyboard
-from database import Movie
-from admins.add_movie import validate_movie_code, cancel_command, start_from_conv, DEFAULT_LANGUAGE
+from database import Movie, DEFAULT_LANGUAGE
+from admins.add_movie import validate_movie_code, cancel_command, start_from_conv
 
 
 QUICK_CODE, QUICK_NAME, QUICK_DESCRIPTION, QUICK_VIDEO, QUICK_SAVE = range(5)

@@ -13,6 +13,10 @@ class LanguageEnum(str, Enum):
     ENGLISH = "Ingliz tilida"
     RUSSIAN = "Rus tilida"
 
+# Barcha kinolar o'zbek tilida — yaratishda til so'ralmaydi,
+# kerak bo'lsa ✏️ Tahrirlash orqali o'zgartiriladi
+DEFAULT_LANGUAGE = LanguageEnum.UZBEK
+
 class Movie(models.Model):
     movie_id = fields.IntField(pk=True)
     movie_code = fields.IntField(unique=True, null=True)
