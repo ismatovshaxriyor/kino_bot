@@ -6,6 +6,7 @@ import redis.asyncio as redis
 from telegram import Bot
 from telegram.error import BadRequest, RetryAfter, Forbidden
 from .settings import ADMIN_ID, MANAGER_ID, REDIS_URL
+from .shutdown_guard import lock_exists
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -306,6 +307,9 @@ async def run_worker(bot_token: str):
     logger.info("🚀 Worker ishga tushdi (Full Mode)...")
 
     while True:
+        if lock_exists():
+            logger.warning("🛑 Yakuniy to'xtatish qulfi topildi — worker to'xtadi")
+            return
         try:
             data = await r.blpop(QUEUE_NAME, timeout=1)
             if not data:

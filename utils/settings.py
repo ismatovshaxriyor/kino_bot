@@ -61,6 +61,8 @@ DB_DOCKER_CONTAINER = os.environ.get("DB_DOCKER_CONTAINER")  # masalan: my_bot_p
 AWS_CREDIT_TOTAL_USD = float(os.environ.get("AWS_CREDIT_TOTAL_USD") or 0)  # boshlang'ich kredit miqdori, $
 AWS_CREDIT_START = os.environ.get("AWS_CREDIT_START")      # YYYY-MM-DD — kredit berilgan sana
 AWS_CREDIT_EXPIRES = os.environ.get("AWS_CREDIT_EXPIRES")  # YYYY-MM-DD — kredit tugash sanasi
+# Yakuniy to'xtatishda adminga yuboriladigan .env nusxasi (docker-compose.yml da read-only ulangan)
+SHUTDOWN_ENV_PATH = os.environ.get("SHUTDOWN_ENV_PATH", "/run/kino/.env")
 AWS_MONITOR_ENABLED = bool(os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"))
 
 

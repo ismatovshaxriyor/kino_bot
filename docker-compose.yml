@@ -64,6 +64,9 @@ services:
     volumes:
       # aerich migratsiyalari host'da saqlanib qolishi uchun (.gitignore'da)
       - ./migrations:/app/migrations
+      # /shutdown (yakuniy to'xtatish): asl .env ni adminga yuborish uchun (faqat o'qish) va qulf fayli uchun
+      - ./.env:/run/kino/.env:ro
+      - ./state:/state
     depends_on:
       db:
         condition: service_healthy
@@ -82,6 +85,8 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       REDIS_URL: redis://redis
+    volumes:
+      - ./state:/state   # yakuniy to'xtatish qulfi (utils/shutdown_guard.py)
     depends_on:
       redis:
         condition: service_healthy

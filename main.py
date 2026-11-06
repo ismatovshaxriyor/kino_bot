@@ -3,7 +3,7 @@ import logging
 from admins import get_channels
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ChatJoinRequestHandler,
-    ChatMemberHandler, InlineQueryHandler, MessageHandler, filters,
+    ChatMemberHandler, InlineQueryHandler, MessageHandler, TypeHandler, filters,
 )
 from telegram import Update
 
@@ -11,8 +11,12 @@ from handlers import *
 from callbacks import *
 from admins import *
 from database import post_init
-from utils import BOT_TOKEN, apply_redis_patch
+from utils import ADMIN_ID, BOT_TOKEN, apply_redis_patch
 from services.server_monitor import aws_status_handler, register_monitor_jobs
+from services.shutdown_mode import (
+    CONFIRM_PATTERN, maintenance_guard, shutdown_command_handler, shutdown_confirm_handler,
+)
+from utils.shutdown_guard import hold_if_shutdown
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -22,6 +26,9 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# /shutdown qulfi bor bo'lsa bot Telegram'ga ulanmaydi (qayta ishga tushsa ham)
+hold_if_shutdown("bot")
 
 apply_redis_patch()
 
@@ -42,6 +49,14 @@ def main():
     bot.add_handler(CommandHandler("history", history_handler))
     bot.add_handler(CommandHandler("top", top_handler))
     bot.add_handler(CommandHandler("aws", aws_status_handler, filters=filters.ChatType.PRIVATE))
+
+    # Yakuniy to'xtatish: guard va tasdiq boshqa handlerlardan oldin (manfiy group) ishlaydi
+    bot.add_handler(TypeHandler(Update, maintenance_guard), group=-2)
+    bot.add_handler(MessageHandler(
+        filters.User(ADMIN_ID) & filters.TEXT & filters.ChatType.PRIVATE & filters.Regex(CONFIRM_PATTERN),
+        shutdown_confirm_handler,
+    ), group=-1)
+    bot.add_handler(CommandHandler("shutdown", shutdown_command_handler, filters=filters.ChatType.PRIVATE))
     bot.add_handler(InlineQueryHandler(inline_query_handler))
     bot.add_handler(ChatJoinRequestHandler(channel_join_request_handler))
     bot.add_handler(ChatMemberHandler(channel_chat_member_handler, ChatMemberHandler.CHAT_MEMBER))

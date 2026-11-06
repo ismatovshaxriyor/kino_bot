@@ -67,3 +67,18 @@ Cost Explorer API'ga har so'rov ~$0.01. Sutkada 1 marta tekshiruv = 2 so'rov ≈
 - Kredit tugasa AWS akkauntni to'xtatishi mumkin; **backup har 6 soatda Telegramga ketadi**, shuning
   uchun ma'lumot saqlanadi. Muhim eslatma: backup yuborilayotganini vaqti-vaqti bilan tekshiring.
 - Kalit sizib chiqsa IAM'da darhol o'chiring (huquqi faqat o'qish, lekin xarajat ma'lumotini ochadi).
+
+## Yakuniy to'xtatish rejimi (`/shutdown`)
+
+Kredit tugab qolganda boshqa serverga o'tishni osonlashtiradi. **Faqat `ADMIN_ID`** ishlata oladi va faqat qat'iy tasdiq bilan:
+
+1. `/shutdown` — bot AWS'dan kredit holatini qayta so'raydi. Kredit kam bo'lmasa (≤ 30 kun yoki ≤ 20%) yoki AWS'dan javob kelmasa — **rad etadi**.
+2. Kredit kam bo'lsa, 2 daqiqa amal qiladigan bir martalik kod beradi: `TASDIQLAYMAN A1B2C3`. Kodni aynan shu ko'rinishda yuborish kerak. Xato/muddati o'tgan kod so'rovni bekor qiladi.
+3. Tasdiqda kredit yana tekshiriladi, so'ng: yangi so'rovlar to'xtatiladi → **yangi zaxira** (`pg_dump`) → **`.env`** hujjat sifatida → ikkalasi yetib borgach `state/shutdown.lock` yoziladi → bot to'xtaydi.
+4. Zaxira yoki `.env` yuborilmasa — to'xtatish **bekor qilinadi**, bot ishlashda davom etadi.
+
+Qulf fayli bor ekan, `bot` va `worker` konteynerlari qayta ishga tushsa ham (reboot, `restart: always`) Telegramga ulanmaydi — yangi serverdagi bot bilan bir token ustida to'qnashmaydi.
+
+Eski serverda qayta yoqish: `rm state/shutdown.lock && docker compose --profile app restart bot worker`.
+
+⚠️ `.env` Telegram orqali yuboriladi (BOT_TOKEN, parollar, AWS kalitlari). Ko'chgach Telegramdagi xabarni o'chiring va tokenlarni yangilang.
