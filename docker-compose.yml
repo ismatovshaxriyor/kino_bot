@@ -143,9 +143,11 @@ services:
     profiles: ["app"]
     restart: always
     network_mode: host
-    command: http 127.0.0.1:8787 --log=stdout ${NGROK_EXTRA:-}
+    command: http 127.0.0.1:8787 --log=stdout --traffic-policy-file=/etc/ngrok/policy.yml ${NGROK_EXTRA:-}
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    volumes:
+      - ./webapp/ngrok_policy.yml:/etc/ngrok/policy.yml:ro   # ngrok ogohlantirish sahifasini o'chiradi
 
 volumes:
   redis_data:
