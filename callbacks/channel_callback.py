@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 
 from database import Channels, ChannelSubscription
 from admins import get_channel_btns
-from utils.checker import get_join_by_request_status
+from utils.checker import channel_button_text, get_join_by_request_status, is_bot_entry
 
 
 async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,11 +19,13 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['state'] = "WAITING_CHANNEL_USERNAME"
 
         await update.effective_message.reply_text(
-            "📢 <b>Kanal yoki guruh qo'shish:</b>\n\n"
+            "📢 <b>Kanal, guruh yoki bot qo'shish:</b>\n\n"
             "Quyidagi usullardan biri orqali qo'shishingiz mumkin:\n"
             "1️⃣ Kanal yoki guruhdan biror xabarni shu yerga <b>forward (uzatish)</b> qiling <i>(eng osoni)</i>\n"
-            "2️⃣ Username yoki ID sini yuboring (masalan: <code>@kanal_nomi</code> yoki <code>-100xxxxxxxxxx</code>)\n\n"
-            "⚠️ <i>Eslatma: Avval botni o'sha kanal yoki guruhga qo'shib, <b>admin</b> huquqini bering!</i>\n\n"
+            "2️⃣ Username yoki ID sini yuboring (masalan: <code>@kanal_nomi</code> yoki <code>-100xxxxxxxxxx</code>)\n"
+            "3️⃣ 🤖 Bot qo'shish uchun uning username'ini (<code>@bot_nomi</code>), t.me havolasini yuboring yoki botdan xabar forward qiling\n\n"
+            "⚠️ <i>Eslatma: kanal yoki guruhga avval botni qo'shib, <b>admin</b> huquqini bering! "
+            "Botlar uchun bu shart emas, lekin ularga obuna tekshirilmaydi — faqat havola tugmasi sifatida ko'rsatiladi.</i>\n\n"
             "❌ Bekor qilish: /cancel",
             parse_mode="HTML"
         )
@@ -44,7 +46,7 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = InlineKeyboardMarkup(confirm_btns)
             username_text = f"@{channel.username}" if channel.username else "yo'q"
             await query.edit_message_text(
-                f"📢 Kanal: {channel.name}\n"
+                f"{'🤖 Bot' if is_bot_entry(channel) else '📢 Kanal'}: {channel.name}\n"
                 f"🆔 ID: {channel.channel_id}\n"
                 f"👤 Username: {username_text}\n\n"
                 "⚠️ O'chirishni tasdiqlang.",
@@ -70,8 +72,10 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             channel = await Channels.get_or_none(channel_id=channel_id)
 
             if channel:
-                join_by_request = await get_join_by_request_status(context.bot, channel_id)
-                if join_by_request is None:
+                join_by_request = None if is_bot_entry(channel) else await get_join_by_request_status(context.bot, channel_id)
+                if is_bot_entry(channel):
+                    status_text = "🤖 <b>Turi:</b> Bot — obuna tekshirilmaydi, faqat havola tugmasi sifatida ko'rsatiladi"
+                elif join_by_request is None:
                     status_text = "❓ <b>Holati:</b> Aniqlab bo'lmadi (bot administrator emasligi mumkin)"
                 elif join_by_request:
                     status_text = "🔒 <b>Holati:</b> Yopiq — faqat tasdiqlash so'rovi orqali qo'shiladi"
@@ -89,7 +93,7 @@ async def channel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from utils.checker import get_channel_url
                 channel_link = await get_channel_url(context.bot, channel)
                 await query.edit_message_text(
-                    f"📢 <b>Kanal:</b> {escape(channel.name)}\n"
+                    f"{'🤖 <b>Bot:</b>' if is_bot_entry(channel) else '📢 <b>Kanal:</b>'} {escape(channel.name)}\n"
                     f"🆔 <b>ID:</b> <code>{channel.channel_id}</code>\n"
                     f"👤 <b>Username:</b> {username_text}\n"
                     f"🔗 <b>Havola:</b> {channel_link}\n"
@@ -129,17 +133,8 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     ]
 
     if not_subscribed:
-        from utils.checker import get_channel_url
-        channel_urls = await asyncio.gather(*(
-            get_channel_url(context.bot, ch)
-            for ch in not_subscribed
-        ))
-        btns = []
-        for ch, url in zip(not_subscribed, channel_urls):
-            btns.append([InlineKeyboardButton(f"📢 {ch.name}", url=url)])
-
-        btns.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
-        keyboard = InlineKeyboardMarkup(btns)
+        from utils.checker import subscription_rows
+        keyboard = InlineKeyboardMarkup(await subscription_rows(context.bot, channels, not_subscribed))
 
         await query.edit_message_text(
             "⚠️ <b>Siz hali barcha kanallarga a'zo bo'lmadingiz!</b>\n\n"
@@ -152,9 +147,10 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         # Har bir kanal uchun "bot orqali tasdiqlangan obunachi" hodisasini
         # belgilaymiz (statistika uchun) — get_or_create bo'lgani sabab
         # foydalanuvchi qayta tekshirsa ham qatorlar takrorlanmaydi.
+        # Botlar tekshirilmaydi, shuning uchun ular statistikaga "obunachi" bo'lib yozilmaydi
         await asyncio.gather(*(
             ChannelSubscription.get_or_create(channel=channel, telegram_id=user_id)
-            for channel in channels
+            for channel in channels if not is_bot_entry(channel)
         ))
 
         pending_movie = context.user_data.pop('pending_movie', None)

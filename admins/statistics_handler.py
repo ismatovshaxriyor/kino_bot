@@ -10,6 +10,7 @@ from tortoise import Tortoise
 
 from database import Channels, ChannelSubscription, Countries, Genre, Movie, Rating, User, UserMovieHistory
 from utils import admin_required, error_notificator
+from utils.checker import is_bot_entry
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,8 @@ async def _channels_text() -> str:
 
     if channels:
         lines = "\n".join(
-            f"{i}. {c.name} — <b>{c.sub_count}</b> obunachi"
+            (f"{i}. 🤖 {c.name} — bot (obuna tekshirilmaydi)" if is_bot_entry(c)
+             else f"{i}. {c.name} — <b>{c.sub_count}</b> obunachi")
             for i, c in enumerate(channels, start=1)
         )
     else:

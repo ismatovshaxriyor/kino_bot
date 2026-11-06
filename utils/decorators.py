@@ -66,18 +66,11 @@ def channel_subscription_required(func):
         ]
 
         if not_subscribed:
-            # A'zo bo'lmagan kanallar ro'yxatini ko'rsatish
-            from utils.checker import get_channel_url
-            channel_urls = await asyncio.gather(*(
-                get_channel_url(context.bot, ch)
-                for ch in not_subscribed
-            ))
-            btns = []
-            for ch, url in zip(not_subscribed, channel_urls):
-                btns.append([InlineKeyboardButton(f"📢 {ch.name}", url=url)])
-
-            btns.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
-            keyboard = InlineKeyboardMarkup(btns)
+            # A'zo bo'lmagan kanallar (+ tekshirilmaydigan botlar) ro'yxatini ko'rsatish
+            from utils.checker import is_bot_entry, subscription_rows
+            keyboard = InlineKeyboardMarkup(await subscription_rows(context.bot, channels, not_subscribed))
+            bot_hint = ("\n🤖 <i>Bot bo'lsa, unga o'tib /start bosing.</i>\n"
+                        if any(is_bot_entry(ch) for ch in channels) else "")
 
             chat = update.effective_chat
             if chat is None:
@@ -88,7 +81,8 @@ def channel_subscription_required(func):
             await context.bot.send_message(
                 chat_id=chat.id,
                 text="⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga a'zo bo'ling:</b>\n\n"
-                     "<i>(Agar kanal yoki guruh yopiq bo'lsa, unga qo'shilish so'rovi yuboring)</i>\n\n"
+                     "<i>(Agar kanal yoki guruh yopiq bo'lsa, unga qo'shilish so'rovi yuboring)</i>\n"
+                     f"{bot_hint}\n"
                      "A'zo bo'lgach yoki so'rov yuborgach, pastdagi <b>\"✅ Tekshirish\"</b> tugmasini bosing.",
                 reply_markup=keyboard,
                 parse_mode="HTML",

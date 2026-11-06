@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 
 from database import Channels
 from utils import error_notificator, admin_required
+from utils.checker import channel_button_text
 
 
 async def get_channel_btns():
@@ -12,7 +13,7 @@ async def get_channel_btns():
     if channels:
         btns = []
         for i, channel in enumerate(channels):
-            btn = InlineKeyboardButton(text=f"📢 {channel.name}", callback_data=f"channel_{channel.channel_id}")
+            btn = InlineKeyboardButton(text=channel_button_text(channel), callback_data=f"channel_{channel.channel_id}")
             btns.append(btn)
             if i % 2 == 1:
                 channel_btns.append(btns)

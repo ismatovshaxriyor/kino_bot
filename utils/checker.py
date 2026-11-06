@@ -1,6 +1,7 @@
+import asyncio
 import logging
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton
 from telegram.error import TelegramError
 
 logger = logging.getLogger(__name__)
@@ -21,12 +22,37 @@ async def is_bot_admin(bot: Bot, chat_id: int | str) -> bool:
         return False
 
 
+def is_bot_entry(channel) -> bool:
+    """Majburiy ro'yxatdagi yozuv kanal/guruh emas, BOT ekanini bildiradi.
+
+    Modelni o'zgartirmaslik uchun belgisi — channel_id: kanal va guruh ID lari doim manfiy (-100...),
+    foydalanuvchi va botlarniki esa musbat. Telegram botga boshqa bot foydalanuvchisi /start bosganini
+    ko'rsatmaydi, shuning uchun bunday yozuvlar tekshirilmaydi — faqat tugmalarda havola sifatida chiqadi.
+    """
+    return channel.channel_id > 0
+
+
+def channel_button_text(channel) -> str:
+    return f"🤖 {channel.name}" if is_bot_entry(channel) else f"📢 {channel.name}"
+
+
+async def subscription_rows(bot: Bot, channels, not_subscribed) -> list[list[InlineKeyboardButton]]:
+    """Obuna talabi tugmalari: a'zo bo'linmagan kanallar + (tekshirib bo'lmaydigan) botlar + "✅ Tekshirish"."""
+    shown = list(not_subscribed) + [ch for ch in channels if is_bot_entry(ch)]
+    urls = await asyncio.gather(*(get_channel_url(bot, ch) for ch in shown))
+    rows = [[InlineKeyboardButton(channel_button_text(ch), url=url)] for ch, url in zip(shown, urls)]
+    rows.append([InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")])
+    return rows
+
+
 async def is_user_subscribed(bot: Bot, user_id: int, channel, *, use_cache: bool = True) -> bool:
     """Kesh (utils/cache.py) bilan: faqat "a'zo" natijasi eslab qolinadi. use_cache=False — har doim Telegramdan tekshiradi
-    ("✅ Tekshirish" tugmasi uchun).
+    ("✅ Tekshirish" tugmasi uchun). Bot yozuvlari (is_bot_entry) tekshirilmaydi — doim True.
     """
     from utils.cache import is_member_cached, remember_member
 
+    if is_bot_entry(channel):
+        return True
     if use_cache and await is_member_cached(user_id, channel.channel_id):
         return True
     subscribed = await _check_subscription(bot, user_id, channel)
@@ -143,12 +169,26 @@ async def get_join_by_request_status(bot: Bot, chat_id: int | str) -> bool | Non
         return None
 
 
+def _normalize_channel_input(channel_input: str) -> str:
+    """`https://t.me/name`, `t.me/name`, `name` -> `@name`; raqamli ID o'zgarishsiz qoladi."""
+    value = channel_input.strip()
+    for prefix in ("https://t.me/", "http://t.me/", "https://telegram.me/", "t.me/", "telegram.me/"):
+        if value.lower().startswith(prefix):
+            value = value[len(prefix):].split("?")[0].strip("/")
+            break
+    return value
+
+
 async def get_channel_info(bot: Bot, channel_input: str) -> dict | None:
     """
-    Kanal username yoki ID bo'yicha ma'lumot olish.
-    channel_input: @username, username, yoki -100xxxxxxxxxx formatida
+    Kanal/guruh/bot ma'lumotini username yoki ID bo'yicha olish.
+    channel_input: @username, username, t.me havolasi yoki -100xxxxxxxxxx formatida.
+
+    type: Telegram chat turi; username `...bot` bilan tugaydigan shaxsiy chat esa "bot" deb qaytariladi
+    (Telegram botlarga username'ni faqat shunday tugatishga ruxsat beradi; getChat is_bot ni bermaydi).
     """
     try:
+        channel_input = _normalize_channel_input(channel_input)
         # -100 bilan boshlanuvchi ID
         if channel_input.startswith('-100') or (channel_input.lstrip('-').isdecimal()):
             chat_id = int(channel_input)
@@ -159,11 +199,14 @@ async def get_channel_info(bot: Bot, channel_input: str) -> dict | None:
             chat_id = channel_input
 
         chat = await bot.get_chat(chat_id=chat_id)
+        chat_type = str(getattr(chat, "type", "channel"))
+        if chat_type == "private" and (chat.username or "").lower().endswith("bot"):
+            chat_type = "bot"
         return {
             "id": chat.id,
-            "title": chat.title,
+            "title": chat.title or (chat.first_name if chat_type == "bot" else None),
             "username": chat.username,
-            "type": str(getattr(chat, "type", "channel")),
+            "type": chat_type,
         }
     except TelegramError as e:
         logger.warning("Kanal ma'lumotini olishda xato: %s", e)

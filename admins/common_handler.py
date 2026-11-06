@@ -24,6 +24,12 @@ def extract_forward_chat(message):
     return None
 
 
+def extract_forward_bot(message):
+    """Forward qilingan xabar BOTdan kelgan bo'lsa, o'sha bot (User) obyektini qaytaradi."""
+    user = getattr(getattr(message, "forward_origin", None), "sender_user", None)
+    return user if user and user.is_bot else None
+
+
 async def _process_channel_addition(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -36,10 +42,13 @@ async def _process_channel_addition(
     from database import Channels
     from utils.checker import is_bot_admin
 
+    is_bot_entry = str(chat_type).lower() == "bot"
+
     if str(chat_type).lower() == "private":
         await update.message.reply_text(
             "⚠️ <b>Bu shaxsiy foydalanuvchi, kanal yoki guruh emas!</b>\n\n"
-            "Iltimos, kanal yoki guruhning username/ID sini yuboring yoki undan xabar forward qiling.",
+            "Iltimos, kanal yoki guruhning username/ID sini yuboring yoki undan xabar forward qiling. "
+            "Bot qo'shmoqchi bo'lsangiz, uning <code>@username</code> ini yuboring.",
             parse_mode="HTML",
         )
         return
@@ -51,6 +60,29 @@ async def _process_channel_addition(
     if existing:
         await update.message.reply_text(
             f"⚠️ <b>\"{escape(chat_title)}\"</b> allaqachon kanallar ro'yxatida mavjud!",
+            parse_mode="HTML",
+        )
+        return
+
+    if is_bot_entry:
+        # Bot uchun admin/obuna tekshiruvi yo'q (Telegram boshqa botga foydalanuvchi /start bosganini bildirmaydi) —
+        # u foydalanuvchiga faqat havola tugmasi sifatida ko'rsatiladi. Bot ID si musbat (kanallarniki manfiy).
+        context.user_data['channel_id'] = chat_id
+        context.user_data['channel_username'] = chat_username
+        context.user_data['channel_name'] = chat_title
+        context.user_data['channel_invite_link'] = None
+        context.user_data['state'] = "WAITING_FOR_CONFIRM_CHANNEL"
+        await update.message.reply_text(
+            f"🤖 <b>Bot:</b> {escape(chat_title)}\n"
+            f"🆔 <b>ID:</b> <code>{chat_id}</code>\n"
+            f"👤 <b>Username:</b> @{chat_username}\n\n"
+            "ℹ️ Bot uchun obuna <b>tekshirilmaydi</b>: foydalanuvchilarga u havola tugmasi sifatida ko'rsatiladi "
+            "(bosib, botda /start bosadi), lekin botdan foydalanish bloklanmaydi.\n\n"
+            "Majburiy ro'yxatga qo'shishni tasdiqlaysizmi?",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(text='✅ Tasdiqlash', callback_data='confirm_channel_add'),
+                InlineKeyboardButton(text='❌ Bekor qilish', callback_data='reject_channel_add'),
+            ]]),
             parse_mode="HTML",
         )
         return
@@ -258,6 +290,14 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
 
         # 1. Forward qilingan xabar orqali kanal yoki guruhni avtomatik aniqlash
         if update.message.forward_origin:
+            forwarded_bot = extract_forward_bot(update.message)
+            if forwarded_bot and forwarded_bot.username:
+                await _process_channel_addition(
+                    update, context, forwarded_bot.id, forwarded_bot.first_name,
+                    forwarded_bot.username, "bot",
+                )
+                return
+
             target_chat = extract_forward_chat(update.message)
             if not target_chat:
                 await update.message.reply_text(
@@ -292,10 +332,10 @@ async def general_message_handler(update: Update, context: ContextTypes.DEFAULT_
 
             if not channel_info:
                 await update.message.reply_text(
-                    "❌ <b>Kanal yoki guruh topilmadi!</b>\n\n"
+                    "❌ <b>Kanal, guruh yoki bot topilmadi!</b>\n\n"
                     "Iltimos, to'g'ri username yoki ID kiriting, yoki kanaldan biror xabarni forward qiling:\n"
                     "• Kanaldan xabarni forward qilish <i>(eng osoni)</i>\n"
-                    "• <code>@kanal_nomi</code>\n"
+                    "• <code>@kanal_nomi</code> yoki <code>@bot_nomi</code> (bot ham bo'ladi)\n"
                     "• <code>-100xxxxxxxxxx</code> (kanal/guruh ID)",
                     parse_mode="HTML",
                 )
