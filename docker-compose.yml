@@ -92,6 +92,61 @@ services:
       redis:
         condition: service_healthy
 
+  # ---- Admin paneli (Telegram Mini App): docs/WEBAPP.md ----
+  # Docker API'ga faqat o'qish: docker-socket-proxy faqat GET /containers/* ga ruxsat beradi.
+  # Port faqat 127.0.0.1 da — panel (host tarmog'ida) shu orqali ulanadi.
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: my_bot_dockerproxy
+    profiles: ["app"]
+    restart: always
+    environment:
+      CONTAINERS: "1"
+    ports:
+      - "127.0.0.1:2375:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # network_mode: host — /proc/net/dev serverning haqiqiy tarmoq trafigini ko'rsatishi uchun.
+  # Faqat 127.0.0.1:8787 da tinglaydi; internetga faqat ngrok orqali chiqadi.
+  webapp:
+    build: .
+    image: kino_bot:latest
+    container_name: my_bot_webapp
+    profiles: ["app"]
+    restart: always
+    command: python -m webapp
+    network_mode: host
+    env_file: .env
+    environment:
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${DB_PORT}
+      REDIS_URL: redis://127.0.0.1
+      WEBAPP_HOST: 127.0.0.1
+      WEBAPP_PORT: "8787"
+      DOCKER_API_URL: http://127.0.0.1:2375
+      NGROK_API_URL: http://127.0.0.1:4040
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dockerproxy:
+        condition: service_started
+
+  # Bepul tarifda havola ngrok qayta ishga tushganda o'zgaradi — webapp uni avtomatik botga ulaydi.
+  # Token: `bash scripts/set_ngrok_token.sh` (NGROK_AUTHTOKEN .env ga yoziladi). Doimiy domen bo'lsa:
+  # .env ga NGROK_EXTRA=--url=nomi.ngrok-free.app
+  ngrok:
+    image: ngrok/ngrok:3-alpine
+    container_name: my_bot_ngrok
+    profiles: ["app"]
+    restart: always
+    network_mode: host
+    command: http 127.0.0.1:8787 --log=stdout ${NGROK_EXTRA:-}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+
 volumes:
   redis_data:
   pg_data:

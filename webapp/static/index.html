@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Server holati</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="title"><span id="dot" class="dot"></span> Server holati</div>
+    <div id="clock" class="hint">—</div>
+  </header>
+  <div class="ranges" id="ranges">
+    <button data-r="600" class="on">10 daq</button>
+    <button data-r="3600">1 soat</button>
+    <button data-r="21600">6 soat</button>
+    <button data-r="86400">24 soat</button>
+  </div>
+
+  <div id="message" class="message" hidden></div>
+  <div id="alerts" class="alerts" hidden></div>
+
+  <main id="app" hidden>
+    <section class="tiles" id="tiles"></section>
+    <section class="charts" id="charts"></section>
+    <section class="card"><h3>🐳 Konteynerlar</h3><div class="table-wrap"><table id="containers"></table></div></section>
+    <section class="info" id="info"></section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
