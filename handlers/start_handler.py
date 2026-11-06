@@ -11,6 +11,31 @@ from utils.decorators import channel_subscription_required
 
 START_IMAGE_PATH = Path(__file__).resolve().parent.parent / "IMG_7403.PNG"
 
+# Telegram birinchi yuklashda qaytargan file_id — keyingi /start larda fayl qayta yuklanmaydi
+_start_image_file_id: str | None = None
+
+
+async def _send_start_photo(message, caption, reply_markup):
+    global _start_image_file_id
+
+    if _start_image_file_id:
+        try:
+            return await message.reply_photo(
+                photo=_start_image_file_id, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+            )
+        except BadRequest:
+            # file_id eskirgan (masalan, token almashgan) — fayldan qayta yuklaymiz
+            _start_image_file_id = None
+
+    if not START_IMAGE_PATH.exists():
+        raise FileNotFoundError("IMG_7403.PNG topilmadi")
+    with START_IMAGE_PATH.open("rb") as img:
+        sent = await message.reply_photo(
+            photo=img, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+        )
+    _start_image_file_id = sent.photo[-1].file_id
+    return sent
+
 
 def _start_caption(first_name: str, created: bool) -> str:
     if created:
@@ -84,16 +109,7 @@ async def _start_handler_impl(update: Update, context: ContextTypes.DEFAULT_TYPE
         welcome_message = None
 
         try:
-            if START_IMAGE_PATH.exists():
-                with START_IMAGE_PATH.open("rb") as img:
-                    welcome_message = await update.message.reply_photo(
-                        photo=img,
-                        caption=caption,
-                        parse_mode="HTML",
-                        reply_markup=inline_keyboard,
-                    )
-            else:
-                raise FileNotFoundError("IMG_7403.PNG topilmadi")
+            welcome_message = await _send_start_photo(update.message, caption, inline_keyboard)
         except (BadRequest, OSError):
             # Fallback: old text welcome if image cannot be sent.
             welcome_message = await update.message.reply_text(caption, parse_mode="HTML")
