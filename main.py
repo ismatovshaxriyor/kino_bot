@@ -12,6 +12,7 @@ from callbacks import *
 from admins import *
 from database import post_init
 from utils import BOT_TOKEN, apply_redis_patch
+from services.server_monitor import aws_status_handler, register_monitor_jobs
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -29,6 +30,7 @@ async def _post_init(application):
     await post_init(application)
     if application.job_queue:
         await reschedule_backup_job(application.job_queue)
+        register_monitor_jobs(application.job_queue)
 
 
 def main():
@@ -39,6 +41,7 @@ def main():
     bot.add_handler(CommandHandler("admin", admin_handler))
     bot.add_handler(CommandHandler("history", history_handler))
     bot.add_handler(CommandHandler("top", top_handler))
+    bot.add_handler(CommandHandler("aws", aws_status_handler, filters=filters.ChatType.PRIVATE))
     bot.add_handler(InlineQueryHandler(inline_query_handler))
     bot.add_handler(ChatJoinRequestHandler(channel_join_request_handler))
     bot.add_handler(ChatMemberHandler(channel_chat_member_handler, ChatMemberHandler.CHAT_MEMBER))

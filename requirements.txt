@@ -5,6 +5,7 @@ anyio==4.12.1
 APScheduler==3.11.2
 asyncclick==8.3.0.7
 beautifulsoup4==4.14.3
+boto3==1.43.125
 certifi==2026.1.4
 cffi==2.0.0
 charset-normalizer==3.4.4
