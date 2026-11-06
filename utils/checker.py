@@ -21,7 +21,21 @@ async def is_bot_admin(bot: Bot, chat_id: int | str) -> bool:
         return False
 
 
-async def is_user_subscribed(bot: Bot, user_id: int, channel) -> bool:
+async def is_user_subscribed(bot: Bot, user_id: int, channel, *, use_cache: bool = True) -> bool:
+    """Kesh (utils/cache.py) bilan: faqat "a'zo" natijasi eslab qolinadi. use_cache=False — har doim Telegramdan tekshiradi
+    ("✅ Tekshirish" tugmasi uchun).
+    """
+    from utils.cache import is_member_cached, remember_member
+
+    if use_cache and await is_member_cached(user_id, channel.channel_id):
+        return True
+    subscribed = await _check_subscription(bot, user_id, channel)
+    if subscribed:
+        await remember_member(user_id, channel.channel_id)
+    return subscribed
+
+
+async def _check_subscription(bot: Bot, user_id: int, channel) -> bool:
     """Foydalanuvchining kanalga a'zo ekanligini yoki so'rov yuborganligini tekshirish.
 
     Kanal yopiq (faqat tasdiqlash so'rovi orqali qo'shiladigan) bo'lsa,

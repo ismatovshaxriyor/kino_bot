@@ -34,21 +34,23 @@ def channel_subscription_required(func):
     """
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        from database import Channels
+        from utils.cache import get_channels
         from utils.checker import is_user_subscribed
 
         user_id = update.effective_user.id
-        channels = await Channels.all()
+        channels = await get_channels()
 
         if not channels:
             # Kanallar yo'q bo'lsa, tekshiruvsiz o'tkazish
             return await func(update, context, *args, **kwargs)
 
         # Admin yoki managerlar majburiy a'zolik tekshiruvidan ozod
+        if user_id in (ADMIN_ID, MANAGER_ID):
+            return await func(update, context, *args, **kwargs)
         from database import User
         from database.user_model import USER_TYPE
         user = await User.get_or_none(telegram_id=user_id)
-        if user_id in (ADMIN_ID, MANAGER_ID) or (user and user.user_type == USER_TYPE.ADMIN):
+        if user and user.user_type == USER_TYPE.ADMIN:
             return await func(update, context, *args, **kwargs)
 
         # Har bir kanal uchun Telegram API so'rovi tarmoq orqali ketadi —

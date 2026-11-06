@@ -16,6 +16,7 @@ from services.server_monitor import aws_status_handler, register_monitor_jobs
 from services.shutdown_mode import (
     CONFIRM_PATTERN, maintenance_guard, shutdown_command_handler, shutdown_confirm_handler,
 )
+from utils.cache import register_channel_cache_signals
 from utils.shutdown_guard import hold_if_shutdown
 
 logging.basicConfig(
@@ -35,6 +36,7 @@ apply_redis_patch()
 
 async def _post_init(application):
     await post_init(application)
+    register_channel_cache_signals()
     if application.job_queue:
         await reschedule_backup_job(application.job_queue)
         register_monitor_jobs(application.job_queue)

@@ -37,3 +37,5 @@ async def channel_chat_member_handler(update: Update, context: ContextTypes.DEFA
     if chat_member.new_chat_member.status in ("left", "kicked"):
         await ChannelJoinRequest.filter(channel=channel, telegram_id=user.id).delete()
         await ChannelSubscription.filter(channel=channel, telegram_id=user.id).delete()
+        from utils.cache import forget_member
+        await forget_member(user.id, channel.channel_id)
