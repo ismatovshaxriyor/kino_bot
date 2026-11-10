@@ -272,6 +272,9 @@ def create_app(hub: Hub, *, publisher=None) -> web.Application:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    # httpx har so'rovda URL'ni (ichida BOT_TOKEN bor) INFO darajasida yozadi — loglarda token oshkor bo'lmasin
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     hub = Hub(
         metrics.HostSampler(),
         metrics.DockerStats(os.environ.get("DOCKER_API_URL", "http://127.0.0.1:2375")),
