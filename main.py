@@ -13,7 +13,7 @@ from admins import *
 from database import post_init
 from utils import ADMIN_ID, BOT_TOKEN, apply_redis_patch
 from services.panel import panel_handler
-from services.server_monitor import aws_status_handler, register_monitor_jobs
+from services.server_monitor import server_status_handler, register_monitor_jobs
 from services.shutdown_mode import (
     CONFIRM_PATTERN, maintenance_guard, shutdown_command_handler, shutdown_confirm_handler,
 )
@@ -52,7 +52,7 @@ def main():
     bot.add_handler(CommandHandler("admin", admin_handler))
     bot.add_handler(CommandHandler("history", history_handler))
     bot.add_handler(CommandHandler("top", top_handler))
-    bot.add_handler(CommandHandler("aws", aws_status_handler, filters=filters.ChatType.PRIVATE))
+    bot.add_handler(CommandHandler(["server", "status", "aws"], server_status_handler, filters=filters.ChatType.PRIVATE))
     bot.add_handler(CommandHandler("panel", panel_handler, filters=filters.ChatType.PRIVATE))
 
     # Yakuniy to'xtatish: guard va tasdiq boshqa handlerlardan oldin (manfiy group) ishlaydi

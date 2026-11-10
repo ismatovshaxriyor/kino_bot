@@ -244,36 +244,25 @@ async def aws_check_job(context: ContextTypes.DEFAULT_TYPE):
 
 # ============================= BUYRUQ + RO'YXATGA OLISH =============================
 
-async def aws_status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/aws — server va AWS holati (faqat ADMIN_ID/MANAGER_ID)."""
+async def server_status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/server yoki /status — server holati (faqat ADMIN_ID/MANAGER_ID)."""
     user = update.effective_user
     if not user or user.id not in (ADMIN_ID, MANAGER_ID):
         return
 
-    parts = []
     try:
         stats, problems = await collect_health()
-        parts.append(format_health(stats, problems))
+        text = format_health(stats, problems)
     except Exception as e:
-        parts.append(f"🖥 Server holatini olib bo'lmadi: <code>{escape(str(e)[:200])}</code>")
-
-    if AWS_MONITOR_ENABLED:
-        try:
-            parts.append(format_aws(await fetch_aws_status()))
-        except Exception as e:
-            parts.append(f"☁️ AWS: xato — <code>{escape(str(e)[:200])}</code>")
-    else:
-        parts.append("☁️ AWS kuzatuvi o'chiq (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY berilmagan)")
+        text = f"🖥 Server holatini olib bo'lmadi: <code>{escape(str(e)[:200])}</code>"
 
     # direct=True: Redis yiqilgan bo'lsa ham javob yetib boradi
-    await context.bot.send_message(chat_id=user.id, text="\n\n".join(parts), parse_mode="HTML", direct=True)
+    await context.bot.send_message(chat_id=user.id, text=text, parse_mode="HTML", direct=True)
+
+
+aws_status_handler = server_status_handler
 
 
 def register_monitor_jobs(job_queue) -> None:
     job_queue.run_repeating(health_check_job, interval=HEALTH_INTERVAL, first=60, name="server_health")
     logger.info("✅ Server monitori rejalashtirildi (har %s daqiqa)", int(HEALTH_INTERVAL.total_seconds() // 60))
-    if AWS_MONITOR_ENABLED:
-        job_queue.run_daily(aws_check_job, time=AWS_CHECK_TIME, name="aws_cost")
-        logger.info("✅ AWS kredit monitori rejalashtirildi (har kuni 09:00 Toshkent)")
-    else:
-        logger.info("AWS kuzatuvi o'chiq (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY yo'q)")

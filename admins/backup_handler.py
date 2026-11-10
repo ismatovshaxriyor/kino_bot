@@ -373,6 +373,19 @@ async def _restore_from_sql(file_path: Path) -> tuple[bool, str]:
     if not data.strip():
         return False, "SQL fayl bo'sh"
 
+    # Mavjud jadvallarni tozalash (TRUNCATE) — duplicate key xatolari bo'lmasligi uchun
+    from tortoise import Tortoise
+    try:
+        conn = Tortoise.get_connection("default")
+        tables_res = await conn.execute_query_dict(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public';"
+        )
+        if tables_res:
+            table_names = [f'"{r["tablename"]}"' for r in tables_res]
+            await conn.execute_query(f"TRUNCATE TABLE {', '.join(table_names)} CASCADE;")
+    except Exception as e:
+        logger.warning("Restore oldidan jadvallarni tozalashda ogohlantirish: %s", e)
+
     # 1) Host'dagi psql
     psql = _find_psql()
     if psql:

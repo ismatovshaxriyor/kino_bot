@@ -7,8 +7,9 @@
 # Ixtiyoriy: bepul doimiy domen (https://dashboard.ngrok.com/domains) — havola o'zgarmaydi.
 set -euo pipefail
 
-HOST="${KINO_HOST:-13.211.43.222}"
-SSH_KEY="${KINO_SSH_KEY:-$HOME/Downloads/kino-bot.pem}"
+HOST="${KINO_HOST:-104.166.88.8}"
+USER="${KINO_USER:-root}"
+SSH_KEY="${KINO_SSH_KEY:-$HOME/.ssh/kino_bot_deploy}"
 
 [[ -f "$SSH_KEY" ]] || { echo "❌ SSH kalit topilmadi: $SSH_KEY (KINO_SSH_KEY bilan yo'lni bering)"; exit 1; }
 
@@ -23,9 +24,9 @@ LINES=("NGROK_AUTHTOKEN=$TOKEN")
 
 echo "⏳ Serverga yozilmoqda ($HOST)..."
 printf '%s\n' "${LINES[@]}" |
-ssh -i "$SSH_KEY" "ubuntu@$HOST" '
+ssh -i "$SSH_KEY" "$USER@$HOST" '
   set -e
-  cd ~/kino_bot
+  cd /root/kino_bot
   umask 077
   grep -vE "^(NGROK_AUTHTOKEN|NGROK_EXTRA)=" .env > .env.new || true
   cat >> .env.new
@@ -34,12 +35,12 @@ ssh -i "$SSH_KEY" "ubuntu@$HOST" '
 '
 
 echo "✅ .env yangilandi. Panel qayta ishga tushirilmoqda..."
-ssh -i "$SSH_KEY" "ubuntu@$HOST" '
-  cd ~/kino_bot
-  sudo docker compose --profile app up -d --force-recreate ngrok webapp >/dev/null 2>&1
-  sleep 25
-  sudo docker compose --profile app ps --format "{{.Name}} {{.Status}}" | grep -E "ngrok|webapp|dockerproxy"
-  sudo docker compose --profile app logs --since 40s webapp 2>&1 | grep -E "Panel havolasi|ngrok|Traceback|ERROR" || true
+ssh -i "$SSH_KEY" "$USER@$HOST" '
+  cd /root/kino_bot
+  docker compose --profile app up -d --force-recreate ngrok webapp >/dev/null 2>&1
+  sleep 10
+  docker compose --profile app ps --format "table {{.Name}}\t{{.Status}}" | grep -E "ngrok|webapp|dockerproxy"
+  docker compose --profile app logs --since 30s webapp 2>&1 | grep -E "Panel havolasi|ngrok|Traceback|ERROR" || true
 '
 unset TOKEN
 echo

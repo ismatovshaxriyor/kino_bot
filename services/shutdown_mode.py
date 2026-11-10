@@ -62,23 +62,10 @@ async def shutdown_command_handler(update: Update, context: ContextTypes.DEFAULT
     if lock_exists():
         await _say(bot, user.id, "🛑 Bot allaqachon to'xtatilgan (qulf fayli bor).")
         return
-    if not AWS_MONITOR_ENABLED:
-        await _say(bot, user.id, "❌ Rad etildi: AWS kuzatuvi yoqilmagan, kredit holatini aniqlab bo'lmaydi.")
-        return
-    try:
-        status = await fetch_aws_status(force=True)
-    except Exception as e:
-        await _say(bot, user.id, f"❌ Rad etildi: kredit holatini olib bo'lmadi.\n<code>{escape(str(e)[:200])}</code>")
-        return
-    if not credit_is_low(status):
-        await _say(bot, user.id, f"❌ Rad etildi: kredit hali yetarli, to'xtatish shart emas.\n\n{format_aws(status)}")
-        return
-
     code = secrets.token_hex(3).upper()
     _pending[user.id] = (code, time.monotonic() + CONFIRM_TTL)
     await _say(bot, user.id, (
         "🛑 <b>YAKUNIY TO'XTATISH</b>\n\n"
-        f"{format_aws(status)}\n\n"
         "Tasdiqlansa:\n"
         "1️⃣ oxirgi bazaning zaxira nusxasi sizga yuboriladi,\n"
         "2️⃣ <b>.env fayli</b> (BOT_TOKEN, parollar, kalitlar) yuboriladi,\n"
@@ -110,16 +97,6 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if not hmac.compare_digest(typed, code):
         await _say(bot, user.id, "❌ Kod noto'g'ri, so'rov bekor qilindi. /shutdown ni qaytadan yuboring.")
-        return
-
-    # Tasdiq paytida kredit hali ham kamligini qayta tekshirish
-    try:
-        status = await fetch_aws_status(force=True)
-    except Exception as e:
-        await _say(bot, user.id, f"❌ Bekor qilindi: kredit holatini qayta tekshirib bo'lmadi.\n<code>{escape(str(e)[:200])}</code>")
-        return
-    if not credit_is_low(status):
-        await _say(bot, user.id, "❌ Bekor qilindi: kredit endi yetarli ko'rinadi (qo'shildimi?).")
         return
 
     await run_final_shutdown(context, user.id)
