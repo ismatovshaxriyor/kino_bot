@@ -2,12 +2,15 @@ import json
 import asyncio
 import logging
 import re
+import signal
+from collections import deque
 import redis.asyncio as redis
 from telegram import Bot
 from telegram.error import BadRequest, RetryAfter, Forbidden
 from .settings import ADMIN_ID, MANAGER_ID, REDIS_URL
 from .shutdown_guard import lock_exists
 from .tg_request import make_request
+from .rate_limiter import RateLimiter
 try:
     from telegram.ext import ExtBot
 except ImportError:
@@ -17,8 +20,17 @@ logger = logging.getLogger(__name__)
 
 QUEUE_NAME = "bot_queue"
 
-# Telegram global limiti ~30 xabar/sek. Biroz pastroq tezlikda yuboramiz.
-SEND_INTERVAL = 0.035
+# Telegram global limiti ~30 xabar/sek. Broadcast (bot jarayonida, ~20/s) bilan birga limitdan oshmaslik
+# uchun worker so'rovlar boshlanishini ~15/s bilan cheklaydi.
+SEND_INTERVAL = 1 / 15
+# Bir vaqtda Telegram'ga uchib yurishi mumkin bo'lgan so'rovlar soni. Turli chatlar xabarlari parallel
+# ketadi (har so'rov ~100 ms kutadi), bir chatniki esa tartib bilan.
+WORKER_CONCURRENCY = 8
+# Redis'dan olingan, lekin hali yuborilmagan xabarlar chegarasi (worker qulasa shuncha xabar yo'qolishi
+# mumkin; SIGTERM'da ular Redis'ga qaytariladi). Chegaraga yetsa, Redis'dan olish to'xtaydi.
+MAX_PENDING = 64
+# To'xtatishda (SIGTERM) yuborilayotgan xabarlarni kutish muddati, soniya (docker stop ~10 soniya beradi).
+SHUTDOWN_GRACE = 8
 # Flood-limit (RetryAfter) bo'lganda eng ko'pi bilan shuncha soniya kutamiz.
 MAX_RETRY_AFTER = 60
 # Bitta xabar shuncha martadan ko'p qayta urinilsa — tashlab yuboriladi
@@ -276,41 +288,108 @@ async def _notify_admin(bot, text: str):
         pass
 
 
-async def _requeue(bot, msg: dict, *, reason: str) -> None:
-    """Xabarni cheklangan urinishlar bilan navbat boshiga qaytarish.
+async def _deliver(bot, msg: dict, limiter: RateLimiter, sem: asyncio.Semaphore) -> None:
+    """Bitta xabarni yuborish: flood-limit va xatolarda shu yerning o'zida (tartib saqlanib) qayta urinadi.
 
-    MAX_QUEUE_RETRIES dan oshsa — tashlab yuboriladi va adminga xabar beriladi
-    (bitta yaroqsiz xabar butun navbatni bloklamasligi uchun).
+    MAX_QUEUE_RETRIES dan oshsa — xabar tashlanadi va adminga xabar beriladi
+    (bitta yaroqsiz xabar chat navbatini abadiy bloklab qo'ymasligi uchun).
     """
-    retries = int(msg.get("_retries", 0)) + 1
-    msg["_retries"] = retries
+    retries = int(msg.get("_retries", 0))
+    while True:
+        try:
+            await limiter.wait()
+            async with sem:
+                await _handle_message(bot, msg)
+            return
+        except RetryAfter as e:
+            # Telegram flood-limit: faqat shu chatning navbati kutadi, boshqa chatlar davom etadi
+            delay = min(int(getattr(e, "retry_after", 1)) + 1, MAX_RETRY_AFTER)
+            reason = "flood-limit"
+            logger.warning("⚠️ Flood limit, %ss kutilmoqda (chat_id=%s)", delay, msg.get("chat_id"))
+        except Forbidden:
+            # Foydalanuvchi botni bloklagan — qayta urinishdan ma'no yo'q
+            logger.info("⛔ Foydalanuvchi bloklagan, xabar tashlandi (chat_id=%s)", msg.get("chat_id"))
+            return
+        except Exception as e:
+            delay = 1
+            reason = str(e)
+            logger.error(
+                "❌ Xabarni yuborishda xato: %s | method=%s chat_id=%s",
+                e, msg.get("method"), msg.get("chat_id"),
+            )
 
-    if retries > MAX_QUEUE_RETRIES:
-        logger.error(
-            "❌ Xabar %s urinishdan keyin tashlandi | sabab=%s method=%s chat_id=%s",
-            retries, reason, msg.get("method"), msg.get("chat_id"),
-        )
-        await _notify_admin(
-            bot,
-            f"Xabar yetkazilmadi ({retries} urinish): {reason} | "
-            f"method={msg.get('method')} chat_id={msg.get('chat_id')}",
-        )
-        return
-
-    try:
-        await r.lpush(QUEUE_NAME, json.dumps(msg))
-    except Exception as push_err:
-        logger.error("❌ Xabarni qayta navbatga qo'yib bo'lmadi: %s", push_err)
+        retries += 1
+        if retries > MAX_QUEUE_RETRIES:
+            logger.error(
+                "❌ Xabar %s urinishdan keyin tashlandi | sabab=%s method=%s chat_id=%s",
+                retries, reason, msg.get("method"), msg.get("chat_id"),
+            )
+            await _notify_admin(
+                bot,
+                f"Xabar yetkazilmadi ({retries} urinish): {reason} | "
+                f"method={msg.get('method')} chat_id={msg.get('chat_id')}",
+            )
+            return
+        msg["_retries"] = retries
+        await asyncio.sleep(delay)
 
 
 async def run_worker(bot_token: str):
+    """Redis navbatidan xabarlarni olib Telegram'ga yuboradi.
+
+    Xabarlar chat_id bo'yicha "yo'lak"larga (lane) bo'linadi: bir chatning xabarlari navbat bilan
+    (yuborish -> tahrirlash -> o'chirish tartibi buzilmasin), turli chatlarniki esa parallel ketadi.
+    Avval hamma xabar bitta oqimda ketma-ket yuborilar edi (~6 xabar/s), endi ~SEND_INTERVAL gacha.
+    """
     bot = Bot(token=bot_token, request=make_request())
-    logger.info("🚀 Worker ishga tushdi (Full Mode)...")
+    logger.info("🚀 Worker ishga tushdi (Full Mode, parallel=%s)...", WORKER_CONCURRENCY)
+
+    limiter = RateLimiter(1 / SEND_INTERVAL)
+    sem = asyncio.Semaphore(WORKER_CONCURRENCY)
+    lanes: dict = {}          # chat_id -> deque(xabarlar)
+    lane_tasks: set = set()
+    unsent: list = []         # to'xtatishda yuborilmay qolgan xabarlar (lane bo'yicha, tartib bilan)
+    pending = 0               # lanelarda turgan + yuborilayotgan xabarlar soni
+
+    stop = asyncio.Event()
+    try:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, stop.set)
+    except (NotImplementedError, RuntimeError):
+        pass  # signal handler qo'yib bo'lmaydigan muhit (masalan Windows)
+
+    async def lane_runner(key, dq: deque):
+        nonlocal pending
+        try:
+            while dq:
+                msg = dq.popleft()
+                try:
+                    await _deliver(bot, msg, limiter, sem)
+                except asyncio.CancelledError:
+                    dq.appendleft(msg)  # to'xtatishda yo'qolmasin
+                    raise
+                except Exception:
+                    logger.exception("❌ Worker lane xatosi (chat_id=%s)", key)
+                finally:
+                    pending -= 1
+        finally:
+            if dq:
+                unsent.append(list(dq))  # bekor qilinganda qolganlarini saqlab qo'yamiz
+                dq.clear()
+            if lanes.get(key) is dq:
+                del lanes[key]
 
     while True:
+        if stop.is_set():
+            logger.info("🛑 To'xtatish signali — worker yakunlanmoqda")
+            break
         if lock_exists():
             logger.warning("🛑 Yakuniy to'xtatish qulfi topildi — worker to'xtadi")
-            return
+            break
+        if pending >= MAX_PENDING:
+            await asyncio.sleep(0.01)
+            continue
         try:
             data = await r.blpop(QUEUE_NAME, timeout=1)
             if not data:
@@ -327,27 +406,33 @@ async def run_worker(bot_token: str):
             logger.error("❌ Buzilgan xabar tashlab yuborildi: %s", e)
             continue
 
-        try:
-            await _handle_message(bot, msg)
-        except RetryAfter as e:
-            # Telegram flood-limit: kutib, xabarni qayta navbatga qaytaramiz.
-            wait = min(int(getattr(e, "retry_after", 1)) + 1, MAX_RETRY_AFTER)
-            logger.warning("⚠️ Flood limit, %ss kutilmoqda (chat_id=%s)", wait, msg.get("chat_id"))
-            await asyncio.sleep(wait)
-            await _requeue(bot, msg, reason="flood-limit")
-            continue
-        except Forbidden:
-            # Foydalanuvchi botni bloklagan — qayta urinishdan ma'no yo'q
-            logger.info("⛔ Foydalanuvchi bloklagan, xabar tashlandi (chat_id=%s)", msg.get("chat_id"))
-            continue
-        except Exception as e:
-            # Kutilmagan xato — xabar yo'qolmasligi uchun cheklangan qayta urinish
-            logger.error(
-                "❌ Xabarni yuborishda xato: %s | method=%s chat_id=%s",
-                e, msg.get("method"), msg.get("chat_id"),
-            )
-            await _requeue(bot, msg, reason=str(e))
-            continue
+        key = msg.get("chat_id")
+        pending += 1
+        dq = lanes.get(key)
+        if dq is not None:
+            dq.append(msg)
+        else:
+            dq = deque([msg])
+            lanes[key] = dq
+            task = asyncio.create_task(lane_runner(key, dq))
+            lane_tasks.add(task)
+            task.add_done_callback(lane_tasks.discard)
 
-        # Telegram limitidan oshmaslik uchun yuborishlar orasida pauza
-        await asyncio.sleep(SEND_INTERVAL)
+    # --- To'xtatish: yuborilayotganlarni kutamiz, qolganini Redis'ga qaytaramiz (yo'qolmasin)
+    if lane_tasks:
+        _, still_running = await asyncio.wait(lane_tasks, timeout=SHUTDOWN_GRACE)
+        for t in still_running:
+            t.cancel()
+        if still_running:
+            await asyncio.wait(still_running, timeout=2)
+    # Har lane xabarlarini teskari tartibda navbat BOSHIGA qo'yamiz — lane ichidagi tartib saqlanadi
+    returned = 0
+    for lane_msgs in unsent + [list(dq) for dq in lanes.values()]:
+        for m in reversed(lane_msgs):
+            try:
+                await r.lpush(QUEUE_NAME, json.dumps(m))
+                returned += 1
+            except Exception as e:
+                logger.error("❌ To'xtatishda xabarni Redis'ga qaytarib bo'lmadi: %s", e)
+    if returned:
+        logger.info("↩️ %s ta yuborilmagan xabar Redis navbatiga qaytarildi", returned)

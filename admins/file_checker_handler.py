@@ -8,7 +8,6 @@ from telegram.ext import ContextTypes
 
 from database import Movie
 from utils import admin_required, ADMIN_ID
-from utils.redis_manager import _original_send_video, _original_delete_message
 
 logger = logging.getLogger(__name__)
 
@@ -126,22 +125,22 @@ INVALID_ERRORS = [
 ]
 
 
-async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int = 2):
-    """Bitta file_id ni tekshirish. Qaytaradi: (yaroqli: bool, xato: str|None)"""
+# get_file so'rovlari parallelligi va ularning orasidagi pauza (Telegram ~30 so'rov/s limitidan ancha past)
+CHECK_CONCURRENCY = 3
+CHECK_PAUSE = 0.1
+CHECK_CHUNK = 30  # progress/log shu qadamda yangilanadi
+
+
+async def _check_single_file(bot, file_id: str, max_retries: int = 2):
+    """Bitta file_id ni tekshirish. Qaytaradi: (yaroqli: bool|None, xato: str|None)
+
+    send_video + delete_message o'rniga `getFile` ishlatiladi: chatga hech narsa yuborilmaydi
+    (flood yo'q, admin chatida videolar chiqmaydi) va so'rovlar 2 baravar kam. 20 MB dan katta
+    fayl uchun Telegram "file is too big" qaytaradi — bu fayl mavjudligini bildiradi (yaroqli).
+    """
     for attempt in range(max_retries + 1):
         try:
-            # Original send_video — Redis patchini chetlab o'tish
-            sent = await _original_send_video(
-                bot,
-                chat_id=admin_id,
-                video=file_id,
-                disable_notification=True,
-            )
-            # Yuborilgan xabarni darhol o'chirish
-            try:
-                await _original_delete_message(bot, chat_id=admin_id, message_id=sent.message_id)
-            except Exception:
-                pass
+            await bot.get_file(file_id)
             return True, None
 
         except RetryAfter as e:
@@ -160,8 +159,8 @@ async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int 
             # Yaroqsiz — fayl buzilgan
             return False, str(e)
 
-        except Forbidden as e:
-            # Bot bloklangan — bu fayl emas, bot muammosi
+        except Forbidden:
+            # Bot muammosi, fayl emas
             return True, None
 
         except (TimedOut, NetworkError) as e:
@@ -175,6 +174,14 @@ async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int 
             return False, str(e)
 
     return None, "Max retries exceeded"
+
+
+async def _check_limited(sem: asyncio.Semaphore, bot, file_id: str):
+    """_check_single_file ni parallelik chegarasi va pauza bilan chaqiradi."""
+    async with sem:
+        result = await _check_single_file(bot, file_id)
+        await asyncio.sleep(CHECK_PAUSE)
+        return result
 
 
 async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admin_id: int):
@@ -201,41 +208,41 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
     invalid_items = []
     skipped = 0
 
-    for i, movie in enumerate(all_movies):
-        is_valid, error = await _check_single_file(bot, admin_id, movie.file_id)
+    sem = asyncio.Semaphore(CHECK_CONCURRENCY)
 
-        if is_valid is True:
-            valid += 1
-        elif is_valid is False:
-            info = await _get_movie_label(movie)
-            info["error"] = error
-            invalid_items.append(info)
-        else:
-            # None — tarmoq xatolik, aniq emas
-            skipped += 1
+    for chunk_start in range(0, total, CHECK_CHUNK):
+        chunk = all_movies[chunk_start:chunk_start + CHECK_CHUNK]
+        results = await asyncio.gather(*(_check_limited(sem, bot, m.file_id) for m in chunk))
 
-        # Progress: har 30 ta kinoda yangilash
-        if (i + 1) % 30 == 0 or (i + 1) == total:
-            logger.info(
-                "🔍 Fayl tekshiruvi: %s/%s | yaroqli=%s yaroqsiz=%s o'tkazildi=%s",
-                i + 1, total, valid, len(invalid_items), skipped,
+        for movie, (is_valid, error) in zip(chunk, results):
+            if is_valid is True:
+                valid += 1
+            elif is_valid is False:
+                info = await _get_movie_label(movie)
+                info["error"] = error
+                invalid_items.append(info)
+            else:
+                # None — tarmoq xatolik, aniq emas
+                skipped += 1
+
+        done = chunk_start + len(chunk)
+        logger.info(
+            "🔍 Fayl tekshiruvi: %s/%s | yaroqli=%s yaroqsiz=%s o'tkazildi=%s",
+            done, total, valid, len(invalid_items), skipped,
+        )
+        try:
+            await bot.edit_message_text(
+                chat_id=status_chat_id,
+                message_id=status_msg_id,
+                text=(
+                    f"🔍 <b>Tekshirilmoqda...</b>\n\n"
+                    f"📊 {done}/{total} | ✅ {valid} | ❌ {len(invalid_items)}"
+                    + (f" | ⏭ {skipped}" if skipped else "")
+                ),
+                parse_mode="HTML",
             )
-            try:
-                await bot.edit_message_text(
-                    chat_id=status_chat_id,
-                    message_id=status_msg_id,
-                    text=(
-                        f"🔍 <b>Tekshirilmoqda...</b>\n\n"
-                        f"📊 {i + 1}/{total} | ✅ {valid} | ❌ {len(invalid_items)}"
-                        + (f" | ⏭ {skipped}" if skipped else "")
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        # Rate limit himoya
-        await asyncio.sleep(0.3)
+        except Exception:
+            pass
 
     # Yakuniy natija
     if invalid_items:
@@ -280,7 +287,6 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
 
         # TXT faylni yuborish
         try:
-            from utils.redis_manager import _original_send_message
             with open(report_path, "rb") as doc:
                 await bot.send_document(
                     chat_id=admin_id,

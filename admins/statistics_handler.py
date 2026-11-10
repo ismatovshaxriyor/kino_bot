@@ -269,25 +269,29 @@ async def _chart_data(period: str) -> dict:
         buckets = 30
         labels = [(start + timedelta(days=i)).strftime("%d.%m") for i in range(buckets)]
 
-    history = await UserMovieHistory.filter(viewed_at__gte=start).prefetch_related("movie", "movie__parent_movie")
+    # Butun Movie obyektlarini (tavsif, file_id...) ikki marta prefetch qilish o'rniga bitta JOIN so'rovida
+    # faqat kerakli ustunlar olinadi — tarix jadvali o'sgani sari xotira va vaqt tejaladi.
+    rows = await UserMovieHistory.filter(viewed_at__gte=start).values_list(
+        "user_id", "viewed_at", "movie_id", "movie__movie_name",
+        "movie__parent_movie_id", "movie__parent_movie__movie_name",
+    )
 
     counts = [0] * buckets
     view_map: dict[int, list] = {}
     unique_users = set()
 
-    for h in history:
-        unique_users.add(h.user_id)
+    for user_id, viewed_at, movie_id, movie_name, parent_id, parent_name in rows:
+        unique_users.add(user_id)
 
-        idx = h.viewed_at.hour if period == "today" else (h.viewed_at.date() - start.date()).days
+        idx = viewed_at.hour if period == "today" else (viewed_at.date() - start.date()).days
         if 0 <= idx < buckets:
             counts[idx] += 1
 
         # Qismli kino bo'lsa — ko'rishni ota-kino nomiga jamlaymiz (har bir qism
         # alohida Movie qatori bo'lgani uchun, aks holda bitta kino bir nechta
         # alohida ustunda ko'rinib qoladi).
-        parent = h.movie.parent_movie
-        canonical_id = parent.movie_id if parent else h.movie.movie_id
-        canonical_name = parent.movie_name if parent else h.movie.movie_name
+        canonical_id = parent_id if parent_id else movie_id
+        canonical_name = parent_name if parent_id else movie_name
 
         if canonical_id not in view_map:
             view_map[canonical_id] = [canonical_name, 0]
@@ -299,7 +303,7 @@ async def _chart_data(period: str) -> dict:
         "labels": labels,
         "counts": counts,
         "top_movies": [(name, count) for name, count in top_movies],
-        "total_views": len(history),
+        "total_views": len(rows),
         "unique_viewers": len(unique_users),
     }
 

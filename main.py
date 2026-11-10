@@ -30,6 +30,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+CONCURRENT_UPDATES = 16
+
 # /shutdown qulfi bor bo'lsa bot Telegram'ga ulanmaydi (qayta ishga tushsa ham)
 hold_if_shutdown("bot")
 
@@ -45,7 +47,16 @@ async def _post_init(application):
 
 
 def main():
-    bot = Application.builder().token(BOT_TOKEN).request(make_request()).post_init(_post_init).build()
+    # concurrent_updates: standartda update'lar bittalab ketma-ket qayta ishlanadi — bitta sekin handler
+    # (Telegram'ga ~100 ms so'rov) hamma foydalanuvchini kutdiradi. Endi bir vaqtda CONCURRENT_UPDATES tagacha.
+    bot = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .request(make_request())
+        .concurrent_updates(CONCURRENT_UPDATES)
+        .post_init(_post_init)
+        .build()
+    )
 
     bot.add_handler(CommandHandler('start', start_handler))
     bot.add_handler(CommandHandler("kino", inline_movie_command_handler))

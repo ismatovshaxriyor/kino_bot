@@ -10,6 +10,7 @@ from telegram.ext import (
 from database import User
 from utils import admin_required, ADMIN_ID
 from utils.admin_btns import get_admin_keyboard
+from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -55,77 +56,125 @@ async def receive_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CONFIRM_BROADCAST
 
 
+# Parallel yuborish sozlamalari. Telegram umumiy limiti ~30 xabar/s — undan pastroq tezlikda yuboramiz.
+BROADCAST_CONCURRENCY = 20   # bir vaqtda uchib yurgan so'rovlar soni (har biri ~100-150 ms kutadi)
+BROADCAST_RATE = 20          # xabar/soniya; worker (~15/s) bilan birga Telegram ~30/s limitiga yaqin
+PROGRESS_EVERY = 50
+
+# Fon vazifaga kuchli havola (aks holda chiqindi yig'uvchi uni o'rtasida o'chirishi mumkin)
+_background_tasks: set = set()
+_broadcast_running = False
+
+
 async def _broadcast_worker(bot, from_chat_id: int, msg_id: int, status_chat_id: int, status_msg_id: int):
-    """Background task: barcha userlarga xabar yuborish"""
-    # Faqat ID'larni yuklaymiz (butun User obyektlari emas) — xotira tejaladi
-    user_ids = await User.all().values_list("telegram_id", flat=True)
-    total = len(user_ids)
-    sent = 0
-    blocked = 0
+    """Background task: barcha userlarga parallel (limitlangan tezlikda) xabar yuborish"""
+    global _broadcast_running
+    try:
+        # Faqat ID'larni yuklaymiz (butun User obyektlari emas) — xotira tejaladi
+        user_ids = await User.all().values_list("telegram_id", flat=True)
+        total = len(user_ids)
+        stats = {"sent": 0, "blocked": 0, "done": 0}
+        limiter = RateLimiter(BROADCAST_RATE)
+        loop = asyncio.get_running_loop()
+        pause = {"until": 0.0}  # flood-limit: hamma yuboruvchilar uchun umumiy pauza
+        started = loop.time()
+        logger.info("📤 Broadcast boshlandi: %s ta foydalanuvchi", total)
 
-    for i, telegram_id in enumerate(user_ids):
-        try:
-            await bot.copy_message(
-                chat_id=telegram_id,
-                from_chat_id=from_chat_id,
-                message_id=msg_id,
-            )
-            sent += 1
-        except RetryAfter as e:
-            # Telegram flood-limit: kutib, shu userga qayta urinamiz
-            await asyncio.sleep(int(getattr(e, "retry_after", 1)) + 1)
-            try:
-                await bot.copy_message(
-                    chat_id=telegram_id,
-                    from_chat_id=from_chat_id,
-                    message_id=msg_id,
-                )
-                sent += 1
-            except Exception:
-                blocked += 1
-        except (Forbidden, BadRequest):
-            blocked += 1
-        except Exception as e:
-            logger.warning("Broadcast: %s ga yuborilmadi: %s", telegram_id, e)
-            blocked += 1
+        async def send_one(telegram_id: int):
+            for _ in range(3):
+                delay = pause["until"] - loop.time()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                await limiter.wait()
+                try:
+                    await bot.copy_message(
+                        chat_id=telegram_id,
+                        from_chat_id=from_chat_id,
+                        message_id=msg_id,
+                    )
+                    stats["sent"] += 1
+                    return
+                except RetryAfter as e:
+                    wait = int(getattr(e, "retry_after", 1)) + 1
+                    pause["until"] = max(pause["until"], loop.time() + wait)
+                    logger.warning("⚠️ Broadcast: flood-limit, %ss kutilmoqda", wait)
+                except (Forbidden, BadRequest):
+                    stats["blocked"] += 1
+                    return
+                except Exception as e:
+                    logger.warning("Broadcast: %s ga yuborilmadi: %s", telegram_id, e)
+                    stats["blocked"] += 1
+                    return
+            stats["blocked"] += 1  # 3 urinishda ham flood-limit
 
-        # Progress: har 50 ta userda yangilash
-        if (i + 1) % 50 == 0 or (i + 1) == total:
+        async def report_progress():
+            stats["done"] += 1
+            done = stats["done"]
+            if done % PROGRESS_EVERY != 0 and done != total:
+                return
+            logger.info("📤 Broadcast: %s/%s | yuborildi=%s xato=%s", done, total, stats["sent"], stats["blocked"])
             try:
                 await bot.edit_message_text(
                     chat_id=status_chat_id,
                     message_id=status_msg_id,
                     text=(
                         f"📤 <b>Yuborilmoqda...</b>\n\n"
-                        f"📊 {i + 1}/{total} | ✅ {sent} | ❌ {blocked}"
+                        f"📊 {done}/{total} | ✅ {stats['sent']} | ❌ {stats['blocked']}"
                     ),
                     parse_mode="HTML",
                 )
             except Exception:
                 pass
 
-        # Telegram rate limit dan himoya
-        await asyncio.sleep(0.05)
+        users_iter = iter(user_ids)  # umumiy iterator: asyncio'da har runner keyingisini oladi
 
-    # Yakuniy natija
-    try:
-        await bot.edit_message_text(
-            chat_id=status_chat_id,
-            message_id=status_msg_id,
-            text=(
-                f"✅ <b>Yuborish yakunlandi!</b>\n\n"
-                f"📊 Jami: {total}\n"
-                f"✅ Yuborildi: {sent}\n"
-                f"❌ Blok/xato: {blocked}"
-            ),
-            parse_mode="HTML",
+        async def runner():
+            for telegram_id in users_iter:
+                await send_one(telegram_id)
+                await report_progress()
+
+        await asyncio.gather(*(runner() for _ in range(BROADCAST_CONCURRENCY)))
+
+        elapsed = int(loop.time() - started)
+        logger.info(
+            "✅ Broadcast tugadi: jami=%s yuborildi=%s xato=%s (%s soniya)",
+            total, stats["sent"], stats["blocked"], elapsed,
         )
+        try:
+            await bot.edit_message_text(
+                chat_id=status_chat_id,
+                message_id=status_msg_id,
+                text=(
+                    f"✅ <b>Yuborish yakunlandi!</b>\n\n"
+                    f"📊 Jami: {total}\n"
+                    f"✅ Yuborildi: {stats['sent']}\n"
+                    f"❌ Blok/xato: {stats['blocked']}\n"
+                    f"⏱ Vaqt: {elapsed // 60} daq {elapsed % 60} son"
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    except asyncio.CancelledError:
+        logger.warning("⚠️ Broadcast bekor qilindi (bot to'xtayaptimi?)")
+        raise
     except Exception:
-        pass
+        logger.exception("❌ Broadcast xato bilan to'xtadi")
+        try:
+            await bot.edit_message_text(
+                chat_id=status_chat_id,
+                message_id=status_msg_id,
+                text="❌ Xabar yuborish kutilmagan xato bilan to'xtadi. Loglarni ko'ring.",
+            )
+        except Exception:
+            pass
+    finally:
+        _broadcast_running = False
 
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Tasdiqlash — background task orqali barcha userlarga yuborish"""
+    global _broadcast_running
     query = update.callback_query
     await query.answer()
 
@@ -134,6 +183,10 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not msg_id or not from_chat_id:
         await query.edit_message_text("❌ Xato: xabar topilmadi.")
+        return ConversationHandler.END
+
+    if _broadcast_running:
+        await query.edit_message_text("⏳ Oldingi xabar hali yuborilmoqda. Tugashini kuting.")
         return ConversationHandler.END
 
     total = await User.all().count()
@@ -149,7 +202,8 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Background task ishga tushirish — bot qotib qolmaydi
-    asyncio.create_task(
+    _broadcast_running = True
+    task = asyncio.create_task(
         _broadcast_worker(
             bot=context.bot,
             from_chat_id=from_chat_id,
@@ -158,6 +212,8 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status_msg_id=status_msg_id,
         )
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return ConversationHandler.END
 
