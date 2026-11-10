@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import datetime
 from telegram import Update
@@ -9,12 +10,51 @@ from database import Movie
 from utils import admin_required, ADMIN_ID
 from utils.redis_manager import _original_send_video, _original_delete_message
 
+logger = logging.getLogger(__name__)
+
+# Fon vazifalarga kuchli havola: asyncio loop faqat zaif havola saqlaydi, havolasiz vazifa
+# ish o'rtasida chiqindi yig'uvchi tomonidan o'chirilib, jimgina to'xtab qolishi mumkin.
+_background_tasks: set = set()
+# Bir vaqtda bitta tekshiruv (ikki marta bosilsa flood ikki baravar bo'lmasin)
+_running_checks: set = set()
+
+
+async def _run_check(bot, status_chat_id: int, status_msg_id: int, admin_id: int):
+    """_check_files_worker uchun o'ram: xatoni logga yozadi va adminga ko'rsatadi."""
+    logger.info("🔍 Fayl tekshiruvi boshlandi (admin_id=%s)", admin_id)
+    try:
+        await _check_files_worker(bot, status_chat_id, status_msg_id, admin_id)
+        logger.info("✅ Fayl tekshiruvi tugadi (admin_id=%s)", admin_id)
+    except asyncio.CancelledError:
+        logger.warning("⚠️ Fayl tekshiruvi bekor qilindi (bot to'xtayaptimi?) admin_id=%s", admin_id)
+        raise
+    except Exception:
+        logger.exception("❌ Fayl tekshiruvi xato bilan to'xtadi (admin_id=%s)", admin_id)
+        try:
+            await bot.edit_message_text(
+                chat_id=status_chat_id,
+                message_id=status_msg_id,
+                text="❌ Tekshirish kutilmagan xato bilan to'xtadi. Loglarni ko'ring va qayta urinib ko'ring.",
+            )
+        except Exception:
+            pass
+    finally:
+        _running_checks.discard(admin_id)
+
 
 @admin_required
 async def file_check_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin 'Tekshirish' tugmasini bosganda — barcha kinolarning file_id sini tekshirish"""
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
+
+    if admin_id in _running_checks:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="⏳ Tekshirish allaqachon ketmoqda. Tugashini kuting.",
+        )
+        return
+    _running_checks.add(admin_id)
 
     # direct=True — Redis ni chetlab o'tish, chunki bizga message_id kerak
     status_msg = await context.bot.send_message(
@@ -29,14 +69,16 @@ async def file_check_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     # Background task ishga tushirish
-    asyncio.create_task(
-        _check_files_worker(
+    task = asyncio.create_task(
+        _run_check(
             bot=context.bot,
             status_chat_id=chat_id,
             status_msg_id=status_msg.message_id,
             admin_id=admin_id,
         )
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def _get_movie_label(movie) -> dict:
@@ -105,6 +147,7 @@ async def _check_single_file(bot, admin_id: int, file_id: str, max_retries: int 
         except RetryAfter as e:
             # Rate limit — kutish va qayta urinish
             wait_time = e.retry_after + 1
+            logger.warning("⚠️ Fayl tekshiruvi: flood-limit, %ss kutilmoqda", wait_time)
             await asyncio.sleep(wait_time)
             continue
 
@@ -173,6 +216,10 @@ async def _check_files_worker(bot, status_chat_id: int, status_msg_id: int, admi
 
         # Progress: har 30 ta kinoda yangilash
         if (i + 1) % 30 == 0 or (i + 1) == total:
+            logger.info(
+                "🔍 Fayl tekshiruvi: %s/%s | yaroqli=%s yaroqsiz=%s o'tkazildi=%s",
+                i + 1, total, valid, len(invalid_items), skipped,
+            )
             try:
                 await bot.edit_message_text(
                     chat_id=status_chat_id,
