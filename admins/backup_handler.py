@@ -24,7 +24,7 @@ from pathlib import Path
 from tempfile import gettempdir
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import TelegramError
+from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
 from telegram.ext import ContextTypes
 
 from database import BackupSettings
@@ -220,6 +220,48 @@ async def create_backup() -> tuple[Path, str]:
     return json_path, "JSON (zaxira usul)"
 
 
+# Hujjat yuklash: PTB'ning standart yozish taymauti (5 s) bir necha MB faylga yetmaydi -> "Timed out".
+DOC_UPLOAD_TIMEOUT = 180
+DOC_CONNECT_TIMEOUT = 30
+DOC_SEND_ATTEMPTS = 3
+
+
+async def _send_document_with_retry(bot, chat_id, path: Path, caption: str) -> bool:
+    """Zaxira faylini uzoq taymaut va qayta urinish bilan yuborish. Muvaffaqiyatli bo'lsa True.
+
+    Vaqtinchalik tarmoq xatolarida (Timed out, Bad Gateway) 3 martagacha urinadi; doimiy xatolarda
+    (Forbidden, BadRequest) qayta urinmaydi. Eslatma: javob yo'qolgan taymautda fayl Telegramga yetib
+    borgan bo'lishi mumkin — kamdan-kam hollarda bir xil zaxira ikki marta kelishi mumkin.
+    """
+    for attempt in range(1, DOC_SEND_ATTEMPTS + 1):
+        try:
+            with path.open("rb") as f:
+                await bot.send_document(
+                    chat_id=chat_id,
+                    document=f,
+                    filename=path.name,
+                    caption=caption,
+                    parse_mode="HTML",
+                    read_timeout=DOC_UPLOAD_TIMEOUT,
+                    write_timeout=DOC_UPLOAD_TIMEOUT,
+                    connect_timeout=DOC_CONNECT_TIMEOUT,
+                    pool_timeout=DOC_CONNECT_TIMEOUT,
+                )
+            return True
+        except RetryAfter as e:
+            delay = min(float(e.retry_after) + 1, 60)
+        except (BadRequest, Forbidden) as e:
+            logger.error("Zaxirani %s ga yuborib bo'lmadi (qayta urinilmaydi): %s", chat_id, e)
+            return False
+        except TelegramError as e:
+            delay = 5 * attempt
+            logger.warning("Zaxirani %s ga yuborishda xato (%s/%s): %s", chat_id, attempt, DOC_SEND_ATTEMPTS, e)
+        if attempt < DOC_SEND_ATTEMPTS:
+            await asyncio.sleep(delay)
+    logger.error("Zaxirani %s ga %s urinishdan keyin ham yuborib bo'lmadi", chat_id, DOC_SEND_ATTEMPTS)
+    return False
+
+
 async def send_backup(bot, chat_ids, *, reason: str = "Qo'lda") -> tuple[int, str]:
     """Zaxira yaratib, berilgan chat_id'larga hujjat sifatida yuborish.
 
@@ -253,18 +295,8 @@ async def send_backup(bot, chat_ids, *, reason: str = "Qo'lda") -> tuple[int, st
             return 0, path.name
 
         for cid in chat_ids:
-            try:
-                with path.open("rb") as f:
-                    await bot.send_document(
-                        chat_id=cid,
-                        document=f,
-                        filename=path.name,
-                        caption=caption,
-                        parse_mode="HTML",
-                    )
+            if await _send_document_with_retry(bot, cid, path, caption):
                 sent += 1
-            except TelegramError as e:
-                logger.error("Zaxirani %s ga yuborib bo'lmadi: %s", cid, e)
         return sent, path.name
     finally:
         # 50 MB dan oshgan holatda faylni saqlab qolamiz, aks holda o'chiramiz
