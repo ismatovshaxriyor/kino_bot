@@ -1,30 +1,15 @@
 import logging
 from telegram import Update
-from telegram.error import BadRequest, NetworkError
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from utils import error_notificator
+from utils.error_notificator import is_transient_network_error
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-def _is_transient_network_error(error: Exception) -> bool:
-    if not isinstance(error, NetworkError):
-        return False
-
-    text = str(error).lower()
-    transient_markers = (
-        "remoteprotocolerror",
-        "server disconnected without sending a response",
-        "readerror",
-        "timed out",
-        "timeout",
-        "connection reset",
-    )
-    return any(marker in text for marker in transient_markers)
-
 
 def _is_expired_query_error(error: Exception) -> bool:
     if not isinstance(error, BadRequest):
@@ -45,7 +30,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     # Transport-level errors happen intermittently; avoid spamming admin for each one.
-    if _is_transient_network_error(err):
+    if is_transient_network_error(err):
         logger.warning("Transient network error: %s", err)
         return
 

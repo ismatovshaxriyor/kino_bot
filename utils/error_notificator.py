@@ -10,6 +10,42 @@ from utils import ADMIN_ID
 
 logger = logging.getLogger(__name__)
 
+# Telegram yoki tarmoq tomonidagi vaqtinchalik uzilishlar (502/504 "Bad Gateway", timeout...): o'zi tiklanadi,
+# adminga xabar yuborish ham o'sha uzilishga tushib, xatolarni yanada ko'paytiradi.
+TRANSIENT_NETWORK_MARKERS = (
+    "remoteprotocolerror",
+    "server disconnected without sending a response",
+    "readerror",
+    "timed out",
+    "timeout",
+    "connection reset",
+    "temporarily unavailable",
+    "service unavailable",
+    "gateway",  # "Bad Gateway", "Gateway Time-out"
+)
+
+TELEGRAM_TEXT_LIMIT = 4096
+
+
+def is_transient_network_error(error: Exception) -> bool:
+    # BadRequest ham NetworkError'ning avlodi, lekin u doimiy xato (so'rovning o'zi noto'g'ri)
+    if not isinstance(error, NetworkError) or isinstance(error, BadRequest):
+        return False
+    text = str(error).lower()
+    return any(marker in text for marker in TRANSIENT_NETWORK_MARKERS)
+
+
+def _fit_traceback(tb: str, budget: int) -> str:
+    """HTML-escape qilingandan KEYIN ham budget belgidan oshmaydigan traceback (oxiri saqlanadi: xato shu yerda)."""
+    if budget <= 0:
+        return ""
+    escaped = html.escape(tb)
+    while len(escaped) > budget and tb:
+        tb = tb[max(len(tb) // 10, 1):]
+        escaped = "…\n" + html.escape(tb)
+    return escaped
+
+
 class ErrorNotificator:
     def __init__(self, admin_ids: list[int]):
         self.admin_ids = admin_ids
@@ -35,23 +71,24 @@ class ErrorNotificator:
             if update.effective_chat:
                 chat_info = f"{update.effective_chat.id}"
 
-        tb = "".join(traceback.format_exception(type(error), error, error.__traceback__))[:3000]
+        tb = "".join(traceback.format_exception(type(error), error, error.__traceback__))
         if not tb.strip():
             tb = "Traceback mavjud emas."
-        tb_escaped = html.escape(tb)
 
-        message = f"""
+        head = f"""
 🚨 <b>XATOLIK!</b>
 
 ⏰ {datetime.now().strftime('%H:%M:%S')}
 
-❌ <code>{html.escape(type(error).__name__)}: {html.escape(str(error))}</code>
+❌ <code>{html.escape(type(error).__name__)}: {html.escape(str(error)[:500])}</code>
 
-👤 User: <code>{user_info}</code>
+👤 User: <code>{html.escape(user_info)}</code>
 💬 Chat Id: <code>{chat_info}</code>
 
-<pre>{tb_escaped}</pre>
-"""
+<pre>"""
+        tail = "</pre>\n"
+        # Telegram 4096 belgidan uzun xabarni qabul qilmaydi ("Message is too long")
+        message = head + _fit_traceback(tb, TELEGRAM_TEXT_LIMIT - len(head) - len(tail) - 16) + tail
 
         for admin_id in self.admin_ids:
             try:
@@ -65,19 +102,8 @@ class ErrorNotificator:
 
     @staticmethod
     def _should_skip_notification(error: Exception) -> bool:
-        if isinstance(error, NetworkError):
-            text = str(error).lower()
-            transient_markers = (
-                "remoteprotocolerror",
-                "server disconnected without sending a response",
-                "readerror",
-                "timed out",
-                "timeout",
-                "connection reset",
-                "temporarily unavailable",
-            )
-            if any(marker in text for marker in transient_markers):
-                return True
+        if is_transient_network_error(error):
+            return True
 
         if isinstance(error, BadRequest):
             text = str(error).lower()

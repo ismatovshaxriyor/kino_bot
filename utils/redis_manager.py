@@ -36,6 +36,18 @@ MAX_RETRY_AFTER = 60
 # Bitta xabar shuncha martadan ko'p qayta urinilsa — tashlab yuboriladi
 # (navbat "zaharlangan" xabar tufayli bloklanib qolmasligi uchun).
 MAX_QUEUE_RETRIES = 5
+# Tarmoq/Telegram vaqtinchalik uzilganda (Bad Gateway, Timed out) kutish 1, 2, 4, 8, 16 soniya — bir necha
+# soniyalik uzilishni yengib o'tish uchun (avval har safar 1 soniya edi: 5 urinish ~5 soniyada tugardi).
+MAX_BACKOFF = 20
+# Qayta urinish foydasiz, shuningdek adminga xabar berish shart bo'lmagan "zararsiz" BadRequest xatolari
+# (masalan, foydalanuvchi xabarni o'zi o'chirib yuborgan).
+BENIGN_BAD_REQUESTS = (
+    "message to edit not found",
+    "message to delete not found",
+    "message can't be edited",
+    "message can't be deleted",
+    "message is not modified",
+)
 
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -310,12 +322,26 @@ async def _deliver(bot, msg: dict, limiter: RateLimiter, sem: asyncio.Semaphore)
             # Foydalanuvchi botni bloklagan — qayta urinishdan ma'no yo'q
             logger.info("⛔ Foydalanuvchi bloklagan, xabar tashlandi (chat_id=%s)", msg.get("chat_id"))
             return
+        except BadRequest as e:
+            # Doimiy xato ("Message is too long", "chat not found"...): qayta yuborish natijani o'zgartirmaydi
+            if any(marker in str(e).lower() for marker in BENIGN_BAD_REQUESTS):
+                logger.info("ℹ️ Xabar tashlandi: %s | method=%s chat_id=%s", e, msg.get("method"), msg.get("chat_id"))
+            else:
+                logger.error(
+                    "❌ Xabar yuborilmadi (qayta urinilmaydi): %s | method=%s chat_id=%s",
+                    e, msg.get("method"), msg.get("chat_id"),
+                )
+                await _notify_admin(
+                    bot, f"Xabar yetkazilmadi: {e} | method={msg.get('method')} chat_id={msg.get('chat_id')}"
+                )
+            return
         except Exception as e:
-            delay = 1
+            # Tarmoq / Telegram vaqtinchalik uzilishi: kutishni oshirib qayta urinamiz
+            delay = min(2 ** retries, MAX_BACKOFF)
             reason = str(e)
-            logger.error(
-                "❌ Xabarni yuborishda xato: %s | method=%s chat_id=%s",
-                e, msg.get("method"), msg.get("chat_id"),
+            logger.warning(
+                "❌ Xabarni yuborishda xato: %s | method=%s chat_id=%s (%s s dan keyin qayta urinadi)",
+                e, msg.get("method"), msg.get("chat_id"), delay,
             )
 
         retries += 1
