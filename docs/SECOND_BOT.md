@@ -30,6 +30,8 @@ BOT_IMAGE=kino_bot2:latest      # birinchi botning image'ini qayta yozib yuborma
 DB_PORT=5434                    # host'dagi port (127.0.0.1) — band bo'lmasin: `ss -ltn`
 REDIS_HOST_PORT=6380
 SERVER_MONITOR=0                # ikkinchi nusxada server monitori kerak emas
+START_IMAGE=assets/kino_bot2.jpg   # /start rasmi (default: IMG_7403.PNG)
+INLINE_THUMB_URL=https://raw.githubusercontent.com/ismatovshaxriyor/kino_bot/main/assets/kino_bot2.jpg   # inline rasm
 ```
 
 ## 3. Ishga tushirish

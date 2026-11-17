@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -9,7 +10,8 @@ from utils import error_notificator, get_user_keyboard
 from utils.decorators import channel_subscription_required
 
 
-START_IMAGE_PATH = Path(__file__).resolve().parent.parent / "IMG_7403.PNG"
+# Start rasmi: loyiha ildiziga nisbatan yo'l. Boshqa bot nusxasida .env dagi START_IMAGE bilan almashtiriladi.
+START_IMAGE_PATH = Path(__file__).resolve().parent.parent / os.environ.get("START_IMAGE", "IMG_7403.PNG")
 
 # Telegram birinchi yuklashda qaytargan file_id — keyingi /start larda fayl qayta yuklanmaydi
 _start_image_file_id: str | None = None
@@ -28,7 +30,7 @@ async def _send_start_photo(message, caption, reply_markup):
             _start_image_file_id = None
 
     if not START_IMAGE_PATH.exists():
-        raise FileNotFoundError("IMG_7403.PNG topilmadi")
+        raise FileNotFoundError(f"{START_IMAGE_PATH.name} topilmadi")
     with START_IMAGE_PATH.open("rb") as img:
         sent = await message.reply_photo(
             photo=img, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
