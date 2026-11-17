@@ -9,6 +9,7 @@ yiqilgan bo'lsa ham yetib boradi. Muammo holati xotirada saqlanadi: bir xil muam
 faqat paydo bo'lganda, REALERT_AFTER dan keyin va tiklanganda xabar qilinadi.
 """
 
+import os
 import asyncio
 import logging
 import shutil
@@ -264,5 +265,9 @@ aws_status_handler = server_status_handler
 
 
 def register_monitor_jobs(job_queue) -> None:
+    # Bir serverda ikkinchi bot bo'lsa, ogohlantirishlar ikki marta kelmasligi uchun .env da SERVER_MONITOR=0
+    if os.environ.get("SERVER_MONITOR", "1").strip().lower() in ("0", "false", "no", "off"):
+        logger.info("ℹ️ Server monitori o'chirilgan (SERVER_MONITOR=0)")
+        return
     job_queue.run_repeating(health_check_job, interval=HEALTH_INTERVAL, first=60, name="server_health")
     logger.info("✅ Server monitori rejalashtirildi (har %s daqiqa)", int(HEALTH_INTERVAL.total_seconds() // 60))

@@ -29,6 +29,7 @@ INSTANCE=kino2                  # konteyner nomlari: kino2_app, kino2_worker, ki
 BOT_IMAGE=kino_bot2:latest      # birinchi botning image'ini qayta yozib yubormaslik uchun
 DB_PORT=5434                    # host'dagi port (127.0.0.1) — band bo'lmasin: `ss -ltn`
 REDIS_HOST_PORT=6380
+SERVER_MONITOR=0                # ikkinchi nusxada server monitori kerak emas
 ```
 
 ## 3. Ishga tushirish
