@@ -5,6 +5,8 @@
 
 COMPOSE = docker compose
 APP = $(COMPOSE) --profile app
+# Ikkinchi bot nusxasida panel xizmatlari kerak emas:  make deploy SERVICES="bot worker"
+SERVICES ?=
 
 .PHONY: help build up up-infra down stop start restart logs ps init-db migrate upgrade backup shell deploy
 
@@ -70,5 +72,5 @@ shell:
 
 deploy:
 	git pull --ff-only
-	$(APP) up -d --build
+	$(APP) up -d --build $(SERVICES)
 	$(APP) ps

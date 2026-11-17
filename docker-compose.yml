@@ -10,18 +10,20 @@
 # bot/worker "app" profilida — profil ko'rsatilmasa ishga tushmaydi, shu sababli
 # bitta fayl ham lokal dev, ham production uchun ishlaydi.
 #
+# Bir serverda IKKINCHI bot (boshqa token): docs/SECOND_BOT.md — .env da INSTANCE, BOT_IMAGE, DB_PORT, REDIS_HOST_PORT.
+#
 # Redis/Postgres portlari faqat 127.0.0.1 ga ochilgan: internetdan yopiq,
 # lekin host'dan (yoki SSH tunnel orqali) psql/redis-cli bilan kirish mumkin.
 
 services:
   redis:
     image: redis:alpine
-    container_name: my_bot_redis
+    container_name: ${INSTANCE:-my_bot}_redis
     restart: always
     # maxmemory: kesh kalitlari (TTL bor) tugasa eng eskisi o'chadi; TTL'siz navbat (bot_queue) hech qachon o'chmaydi
     command: redis-server --save 60 1 --loglevel warning --maxmemory 128mb --maxmemory-policy volatile-lru
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -32,7 +34,7 @@ services:
 
   db:
     image: postgres:15-alpine
-    container_name: my_bot_postgres
+    container_name: ${INSTANCE:-my_bot}_postgres
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -50,8 +52,8 @@ services:
 
   bot:
     build: .
-    image: kino_bot:latest
-    container_name: my_bot_app
+    image: ${BOT_IMAGE:-kino_bot:latest}
+    container_name: ${INSTANCE:-my_bot}_app
     profiles: ["app"]
     restart: always
     command: python main.py
@@ -76,8 +78,8 @@ services:
 
   worker:
     build: .
-    image: kino_bot:latest
-    container_name: my_bot_worker
+    image: ${BOT_IMAGE:-kino_bot:latest}
+    container_name: ${INSTANCE:-my_bot}_worker
     profiles: ["app"]
     restart: always
     command: python worker.py
