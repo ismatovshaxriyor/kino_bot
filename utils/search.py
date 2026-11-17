@@ -12,6 +12,8 @@ import re
 
 from tortoise import Tortoise
 
+from utils.ttl_cache import AsyncTTLCache
+
 SIMILARITY_THRESHOLD = 0.25
 
 # "2-qism", "2 qism", "2qism", "qism 2", "3-qism" kabi qism-raqam
@@ -47,9 +49,21 @@ _WHERE_CLAUSE = """
 """
 
 
+# Qidiruv (count + saralangan select, similarity indeksdan foydalana olmaydi) parallel yuklamada tez sekinlashadi.
+# Mashhur so'rovlar (ayniqsa inline) qisqa muddat keshlanadi; admin kino qo'shsa, yangilanish <= SEARCH_CACHE_TTL.
+SEARCH_CACHE_TTL = 30  # soniya
+_search_cache = AsyncTTLCache(ttl=SEARCH_CACHE_TTL, maxsize=500)
+
+
 async def search_movie_ids(query: str, *, limit: int, offset: int = 0) -> tuple[list[int], int]:
     """Fuzzy qidiruvga mos kino id'larini (o'xshashlik bo'yicha saralangan) va jami sonini qaytaradi."""
     query = _strip_part_suffix(query)
+    return await _search_cache.get_or_compute(
+        (query.strip().lower(), limit, offset), lambda: _search_movie_ids_db(query, limit=limit, offset=offset)
+    )
+
+
+async def _search_movie_ids_db(query: str, *, limit: int, offset: int) -> tuple[list[int], int]:
     conn = Tortoise.get_connection("default")
 
     count_rows = await conn.execute_query_dict(

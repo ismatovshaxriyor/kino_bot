@@ -1,11 +1,10 @@
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from datetime import date
 from math import ceil
 
-from services import ai_assistant
+from services import ai_assistant, run_in_ai_pool, AIBusyError
 from database import User, Movie, UserMovieHistory
 from utils import error_notificator
 from utils.settings import MOVIES_PER_PAGE
@@ -110,9 +109,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action(action="typing")
 
         try:
-            # AI client sinxron (requests + time.sleep) — event-loopni bloklamaslik
-            # uchun alohida threadda ishga tushiramiz.
-            response = await asyncio.to_thread(ai_assistant.get_movie_recommendation, user_message)
+            # AI client sinxron (requests + time.sleep) — event-loopni bloklamaslik uchun
+            # AI'ga ajratilgan alohida thread pool'da ishga tushiramiz (navbat cheklangan).
+            try:
+                response = await run_in_ai_pool(ai_assistant.get_movie_recommendation, user_message)
+            except AIBusyError:
+                await update.message.reply_text(
+                    "⏳ Hozir AI band — so'rovlar ko'p. Iltimos, bir daqiqadan keyin qayta urinib ko'ring."
+                )
+                return
 
             try:
                 await context.bot.send_message(chat_id, response, parse_mode="Markdown")

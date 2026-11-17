@@ -8,7 +8,7 @@ APP = $(COMPOSE) --profile app
 # Ikkinchi bot nusxasida panel xizmatlari kerak emas:  make deploy SERVICES="bot worker"
 SERVICES ?=
 
-.PHONY: help build up up-infra down stop start restart logs ps init-db migrate upgrade backup shell deploy
+.PHONY: test help build up up-infra down stop start restart logs ps init-db migrate upgrade backup shell deploy
 
 help:
 	@echo "make build     - image'ni yig'ish"
@@ -24,6 +24,7 @@ help:
 	@echo "make backup    - host'ga qo'lda SQL backup (backups/ papkaga)"
 	@echo "make shell     - bot konteynerida bash"
 	@echo "make deploy    - git pull + qayta yig'ish + qayta ishga tushirish"
+	@echo "make test      - testlarni Docker ichida ishga tushirish (pytest)"
 
 build:
 	$(APP) build
@@ -74,3 +75,8 @@ deploy:
 	git pull --ff-only
 	$(APP) up -d --build $(SERVICES)
 	$(APP) ps
+
+# Testlar bot image ichida ishlaydi (kutubxonalar tayyor). Ikkinchi nusxada: make test IMAGE=kino_bot2:latest
+IMAGE ?= kino_bot:latest
+test:
+	docker run --rm -v "$(CURDIR)":/app -w /app $(IMAGE) sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q"

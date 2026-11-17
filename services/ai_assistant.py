@@ -11,8 +11,11 @@ from google.genai import types
 from typing import Optional
 import logging
 import requests
+import asyncio
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import hashlib
 import os
@@ -125,7 +128,9 @@ class MovieAIAssistant:
         self._cache_timeout = 900
 
         # Rate limiting
-        self._last_request_time = 0
+        # Thread-xavfsiz: har so'rov o'z "slot"ini oladi (oraliq >= _min_request_interval), kutish lock tashqarisida
+        self._rate_lock = threading.Lock()
+        self._next_slot = 0.0
         self._min_request_interval = 2.0
 
         self.system_instruction = """
@@ -150,14 +155,13 @@ Faqat kino mavzusida gaplash. Boshqa mavzularga xushmuomalalik bilan rad javobin
 """
 
     def _wait_for_rate_limit(self):
-        current_time = time.time()
-        time_since_last = current_time - self._last_request_time
-
-        if time_since_last < self._min_request_interval:
-            wait_time = self._min_request_interval - time_since_last
-            time.sleep(wait_time)
-
-        self._last_request_time = time.time()
+        with self._rate_lock:
+            now = time.time()
+            slot = max(now, self._next_slot)
+            self._next_slot = slot + self._min_request_interval
+        delay = slot - now
+        if delay > 0:
+            time.sleep(delay)
 
     def _get_cache_key(self, text: str) -> str:
         return hashlib.md5(text.encode()).hexdigest()
@@ -285,3 +289,29 @@ Ro'yxatni to'liq tugat.
         return result
 
 ai_assistant = MovieAIAssistant(GEMINI_API_KEY)
+
+
+# --- AI chaqiruvlari uchun ALOHIDA thread pool -------------------------------------------------
+# AI client sinxron (requests + time.sleep). `asyncio.to_thread` umumiy pool'dan foydalanadi, u DNS
+# (getaddrinfo) va boshqa ishlarni ham bajaradi — AI so'rovlari uni band qilsa, butun bot sekinlashadi.
+AI_WORKERS = _get_env_int("AI_WORKERS", 4)
+AI_MAX_PENDING = _get_env_int("AI_MAX_PENDING", 20)   # navbat/ishlayotganlar shundan oshsa — "band" javobi
+
+_ai_executor = ThreadPoolExecutor(max_workers=AI_WORKERS, thread_name_prefix="ai")
+_ai_pending = 0  # faqat event-loop thread'idan o'zgartiriladi
+
+
+class AIBusyError(Exception):
+    """AI navbati to'la — foydalanuvchiga keyinroq urinishni aytamiz."""
+
+
+async def run_in_ai_pool(func, *args):
+    """Sinxron AI funksiyasini alohida pool'da ishga tushirish (navbat cheklangan)."""
+    global _ai_pending
+    if _ai_pending >= AI_MAX_PENDING:
+        raise AIBusyError()
+    _ai_pending += 1
+    try:
+        return await asyncio.get_running_loop().run_in_executor(_ai_executor, func, *args)
+    finally:
+        _ai_pending -= 1

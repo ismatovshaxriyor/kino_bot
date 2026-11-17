@@ -7,6 +7,7 @@ from tortoise.functions import Count
 
 from database import Movie
 from utils.settings import MOVIES_PER_PAGE
+from utils.ttl_cache import AsyncTTLCache
 from utils.decorators import channel_subscription_required, user_registered_required
 
 TOP_FILTERS = {
@@ -30,6 +31,10 @@ def get_top_filter_keyboard() -> InlineKeyboardMarkup:
         ]
     ]
     return InlineKeyboardMarkup(btns)
+
+
+TOP_VIEWS_CACHE_TTL = 60  # soniya
+_views_page_cache = AsyncTTLCache(ttl=TOP_VIEWS_CACHE_TTL, maxsize=50)
 
 
 async def _filter_total(filter_type: str) -> int:
@@ -63,12 +68,17 @@ async def _get_movies_page(filter_type: str, *, limit: int, offset: int) -> list
     (saralash va LIMIT/OFFSET DBda bajariladi — butun katalog xotiraga
     yuklanmaydi)."""
     if filter_type == "views":
-        return await (
-            Movie.filter(parent_movie=None)
-            .annotate(views_count=Count("viewed_by"))
-            .order_by("-views_count", "-movie_id")
-            .offset(offset)
-            .limit(limit)
+        # Har safar ~78 ming tarix qatorini sanaydi (~20 ms, parallel yuklamada soniyalar) — natija sekin
+        # o'zgaradi, shuning uchun qisqa muddat keshlanadi va bir vaqtdagi so'rovlar birlashadi.
+        return await _views_page_cache.get_or_compute(
+            (limit, offset),
+            lambda: (
+                Movie.filter(parent_movie=None)
+                .annotate(views_count=Count("viewed_by"))
+                .order_by("-views_count", "-movie_id")
+                .offset(offset)
+                .limit(limit)
+            ),
         )
 
     if filter_type == "recent":
